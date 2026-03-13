@@ -44,6 +44,12 @@ public class PlayerProfileService {
                 playerProfile.getCurrentElo(),
                 playerProfile.isProvisional(),
                 playerProfile.getMatchesPlayed(),
+                playerProfile.isSurveyCompleted(),
+                playerProfile.getSurveyCompletedAt(),
+                playerProfile.getInitialRating(),
+                playerProfile.getEstimatedCategory(),
+                playerProfile.isRequiresClubVerification(),
+                playerProfile.getClubVerificationStatus(),
                 playerProfile.getCreatedAt(),
                 playerProfile.getUpdatedAt()
         );

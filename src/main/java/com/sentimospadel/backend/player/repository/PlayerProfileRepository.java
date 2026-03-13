@@ -15,5 +15,6 @@ public interface PlayerProfileRepository extends JpaRepository<PlayerProfile, Lo
     @EntityGraph(attributePaths = "user")
     java.util.List<PlayerProfile> findAll();
 
+    @EntityGraph(attributePaths = "user")
     Optional<PlayerProfile> findByUserId(Long userId);
 }

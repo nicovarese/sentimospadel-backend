@@ -57,6 +57,8 @@ Future modules such as match, tournament, ranking, reservation, payment, and not
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `POST /api/onboarding/initial-survey`
+- `GET /api/onboarding/initial-survey`
 - `GET /api/users`
 - `GET /api/users/{id}`
 - `GET /api/players`
@@ -74,6 +76,7 @@ Future modules such as match, tournament, ranking, reservation, payment, and not
 - `POST /api/auth/register` creates a user with a BCrypt-hashed password
 - `POST /api/auth/login` verifies real credentials and returns a JWT access token
 - `GET /api/auth/me` requires a Bearer token and returns the authenticated user
+- The onboarding survey endpoints are also JWT-protected and are intentionally separate from registration
 
 Example login request:
 ```json
@@ -103,6 +106,50 @@ curl http://localhost:8081/api/auth/me `
 
 The default JWT secret is only a local development fallback. Override `JWT_SECRET` outside local development.
 
+## Initial Onboarding Survey
+- `POST /api/onboarding/initial-survey` accepts the authenticated player onboarding survey answers `q1` through `q10`
+- Each answer must be one of `A`, `B`, `C`, `D`, or `E`
+- The backend stores both the raw survey answers and the calculated onboarding result in a dedicated `initial_survey_submissions` table
+- The current onboarding result is also mirrored onto `player_profiles` so the current player profile has `surveyCompleted`, `surveyCompletedAt`, `initialRating`, `estimatedCategory`, `requiresClubVerification`, and `clubVerificationStatus`
+- Re-submitting the initial survey is currently blocked after the first successful submission
+- `GET /api/onboarding/initial-survey` returns the authenticated user's saved onboarding result and returns `404` when no survey has been submitted yet
+
+Example onboarding request:
+```json
+{
+  "q1": "B",
+  "q2": "C",
+  "q3": "D",
+  "q4": "A",
+  "q5": "B",
+  "q6": "C",
+  "q7": "D",
+  "q8": "A",
+  "q9": "B",
+  "q10": "C"
+}
+```
+
+The onboarding calculation currently does only the initial survey scoring flow:
+- answer mapping `A=0`, `B=1`, `C=2`, `D=3`, `E=4`
+- weighted scoring and normalized score calculation
+- the anti-inflation rule on `q9` when `q6` is below `C`
+- the rating gates for `Primera` and `Segunda`
+- Uruguay category mapping from the resulting rating
+
+The rating and estimated category are always visible.
+
+If the estimated category is `PRIMERA` or `SEGUNDA`:
+- `requiresClubVerification=true`
+- `clubVerificationStatus=PENDING`
+- the rating and category still remain visible
+
+For `TERCERA` through `SEPTIMA`:
+- `requiresClubVerification=false`
+- `clubVerificationStatus=NOT_REQUIRED`
+
+The actual club verification workflow, ranking engine, match logic, and tournament logic are still pending.
+
 ## Project Structure
 ```text
 src/main/java/com/sentimospadel/backend
@@ -112,6 +159,7 @@ src/main/java/com/sentimospadel/backend
   user/
   player/
   club/
+  onboarding/
 
 src/main/resources
   application.yml
@@ -127,4 +175,6 @@ src/main/resources
 - Login now authenticates real credentials through Spring Security
 - Login now returns a JWT access token
 - `/api/auth/me` resolves the authenticated user from the Bearer token
+- The authenticated onboarding survey flow now persists raw answers plus calculated initial rating and Uruguay category
+- Primera and Segunda onboarding results are persisted as visible results with `PENDING` club verification
 - Refresh tokens are intentionally not implemented yet

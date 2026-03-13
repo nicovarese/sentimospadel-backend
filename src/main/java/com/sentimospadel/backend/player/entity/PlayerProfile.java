@@ -1,6 +1,8 @@
 package com.sentimospadel.backend.player.entity;
 
 import com.sentimospadel.backend.player.enums.PreferredSide;
+import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
+import com.sentimospadel.backend.player.enums.UruguayCategory;
 import com.sentimospadel.backend.shared.persistence.BaseEntity;
 import com.sentimospadel.backend.user.entity.User;
 import jakarta.persistence.Column;
@@ -14,6 +16,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -66,4 +70,24 @@ public class PlayerProfile extends BaseEntity {
 
     @Column(name = "matches_played", nullable = false)
     private Integer matchesPlayed;
+
+    @Column(name = "survey_completed", nullable = false)
+    private boolean surveyCompleted;
+
+    @Column(name = "survey_completed_at")
+    private Instant surveyCompletedAt;
+
+    @Column(name = "initial_rating", precision = 4, scale = 2)
+    private BigDecimal initialRating;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estimated_category", length = 20)
+    private UruguayCategory estimatedCategory;
+
+    @Column(name = "requires_club_verification", nullable = false)
+    private boolean requiresClubVerification;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "club_verification_status", nullable = false, length = 20)
+    private ClubVerificationStatus clubVerificationStatus;
 }
