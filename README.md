@@ -53,6 +53,7 @@ Future modules such as match, tournament, ranking, reservation, payment, and not
 ## Available Endpoints
 - `GET /api/health`
 - `POST /api/auth/register`
+- `POST /api/auth/login`
 - `GET /api/users`
 - `GET /api/users/{id}`
 - `GET /api/players`
@@ -87,3 +88,5 @@ src/main/resources
 - Club creation is available
 - User and player reads are available
 - Registration now stores hashed passwords with BCrypt
+- Login now authenticates real credentials through Spring Security
+- JWT is intentionally not implemented yet
