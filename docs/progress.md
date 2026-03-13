@@ -38,6 +38,7 @@
 - PostgreSQL connection works against the isolated `sentimospadel` database
 - Flyway migration runs before Hibernate validation
 - Shared error handling and audit base entity are in place
+- Detailed chronological log for the day is available in `docs/bitacora-2026-03-13.md`
 - Modules currently implemented:
   - health
   - auth registration
