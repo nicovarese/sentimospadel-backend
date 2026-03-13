@@ -35,3 +35,9 @@ management:
     health:
       probes:
         enabled: true
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:change-this-local-jwt-secret-change-this-local-jwt-secret}
+      expiration-ms: ${JWT_EXPIRATION_MS:3600000}

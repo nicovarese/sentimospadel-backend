@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.sentimospadel.backend.auth.dto.CurrentUserResponse;
 import com.sentimospadel.backend.auth.dto.LoginRequest;
 import com.sentimospadel.backend.auth.dto.LoginResponse;
 import com.sentimospadel.backend.auth.dto.RegisterRequest;
@@ -39,11 +40,14 @@ class AuthServiceTest {
     @Mock
     private AuthenticationManager authenticationManager;
 
+    @Mock
+    private JwtService jwtService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, authenticationManager);
+        authService = new AuthService(userRepository, passwordEncoder, authenticationManager, jwtService);
     }
 
     @Test
@@ -93,11 +97,14 @@ class AuthServiceTest {
 
         LoginRequest request = new LoginRequest(" Player@Example.com ", "secret123");
 
+        when(jwtService.generateAccessToken(user)).thenReturn("jwt-token");
         when(userRepository.findByEmail("player@example.com")).thenReturn(java.util.Optional.of(user));
 
         LoginResponse response = authService.login(request);
 
         verify(authenticationManager).authenticate(any());
+        assertEquals("jwt-token", response.accessToken());
+        assertEquals("Bearer", response.tokenType());
         assertEquals("player@example.com", response.email());
         assertEquals(UserRole.PLAYER, response.role());
         assertEquals(UserStatus.ACTIVE, response.status());
@@ -110,5 +117,23 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
 
         assertThrows(BadCredentialsException.class, () -> authService.login(request));
+    }
+
+    @Test
+    void getCurrentUserReturnsSafeUserData() {
+        User user = User.builder()
+                .email("player@example.com")
+                .passwordHash("hashed")
+                .role(UserRole.PLAYER)
+                .status(UserStatus.ACTIVE)
+                .build();
+
+        when(userRepository.findByEmail("player@example.com")).thenReturn(java.util.Optional.of(user));
+
+        CurrentUserResponse response = authService.getCurrentUser("player@example.com");
+
+        assertEquals("player@example.com", response.email());
+        assertEquals(UserRole.PLAYER, response.role());
+        assertEquals(UserStatus.ACTIVE, response.status());
     }
 }

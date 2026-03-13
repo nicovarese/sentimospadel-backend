@@ -23,6 +23,8 @@ Backend for the Sentimos Padel application. The project is being built as a modu
    - `DB_URL=jdbc:postgresql://localhost:5432/sentimospadel?currentSchema=public`
    - `DB_USERNAME=sentimospadel_user`
    - `DB_PASSWORD=sentimospadel_local_password`
+   - `JWT_SECRET=change-this-local-jwt-secret-change-this-local-jwt-secret`
+   - `JWT_EXPIRATION_MS=3600000`
 4. Start the backend:
 ```powershell
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081"
@@ -54,6 +56,7 @@ Future modules such as match, tournament, ranking, reservation, payment, and not
 - `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `GET /api/auth/me`
 - `GET /api/users`
 - `GET /api/users/{id}`
 - `GET /api/players`
@@ -66,6 +69,39 @@ Future modules such as match, tournament, ranking, reservation, payment, and not
 - The backend defaults to port `8080`
 - Another local app may already be using `8080`
 - For local isolation, run this backend on `8081` when needed
+
+## Authentication
+- `POST /api/auth/register` creates a user with a BCrypt-hashed password
+- `POST /api/auth/login` verifies real credentials and returns a JWT access token
+- `GET /api/auth/me` requires a Bearer token and returns the authenticated user
+
+Example login request:
+```json
+{
+  "email": "player@example.com",
+  "password": "secret123"
+}
+```
+
+Example login response shape:
+```json
+{
+  "accessToken": "<jwt>",
+  "tokenType": "Bearer",
+  "id": 1,
+  "email": "player@example.com",
+  "role": "PLAYER",
+  "status": "ACTIVE"
+}
+```
+
+Example authenticated request:
+```powershell
+curl http://localhost:8081/api/auth/me `
+  -H "Authorization: Bearer <access-token>"
+```
+
+The default JWT secret is only a local development fallback. Override `JWT_SECRET` outside local development.
 
 ## Project Structure
 ```text
@@ -89,4 +125,6 @@ src/main/resources
 - User and player reads are available
 - Registration now stores hashed passwords with BCrypt
 - Login now authenticates real credentials through Spring Security
-- JWT is intentionally not implemented yet
+- Login now returns a JWT access token
+- `/api/auth/me` resolves the authenticated user from the Bearer token
+- Refresh tokens are intentionally not implemented yet

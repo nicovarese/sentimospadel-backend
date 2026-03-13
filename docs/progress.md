@@ -6,8 +6,8 @@
 - Confirmed and fixed Flyway runtime execution for the local PostgreSQL setup
 - Isolated the backend against its own local database configuration
 - Added practical project documentation in `README.md`
-- Added the first thin auth slices for registration and login
-- Kept the modular-monolith structure intact and did not add JWT yet
+- Added the first thin auth slices for registration, login, and JWT-backed authenticated requests
+- Kept the modular-monolith structure intact and did not add refresh tokens yet
 
 ### Key Technical Decisions
 - Kept Flyway as the only schema evolution mechanism
@@ -16,6 +16,7 @@
 - Kept security in temporary bootstrap mode while introducing a real `PasswordEncoder`
 - Used `BCryptPasswordEncoder` for persisted password hashing
 - Used Spring Security authentication infrastructure for real credential verification
+- Added a stateless JWT access-token flow for authenticated requests
 - Normalized registration email values before persistence
 - Defaulted newly registered users to role `PLAYER` and status `ACTIVE`
 
@@ -31,7 +32,7 @@
 - Local PostgreSQL admin credentials were not available from this environment
   - Resolution: documented the isolated database/user assumptions and kept repo config aligned with them
 - Registration and login needed to coexist with bootstrap-mode security
-  - Resolution: kept `permitAll`, added a real `AuthenticationManager`, and kept JWT deferred
+  - Resolution: kept most endpoints usable, protected only `/api/auth/me`, and introduced Bearer-token validation
 
 ### Current Backend Status
 - PostgreSQL connection works against the isolated `sentimospadel` database
@@ -41,13 +42,16 @@
   - health
   - auth registration
   - auth login
+  - auth current-user endpoint
   - user read endpoints
   - player read endpoints
   - club read/create endpoints
 - Registration persists a new user with a BCrypt-hashed password
 - Login authenticates against persisted users with Spring Security
+- Login now returns a JWT access token
+- `/api/auth/me` resolves the authenticated user from the JWT-backed security context
 - Duplicate email registration is rejected cleanly
-- JWT is still pending
+- Refresh tokens are still pending
 - Player onboarding, declared level, and ranking-related product decisions are intentionally deferred
 
 ### Pending Next Steps
