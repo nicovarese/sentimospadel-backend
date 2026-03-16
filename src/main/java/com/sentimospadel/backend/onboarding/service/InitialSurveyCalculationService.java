@@ -16,6 +16,7 @@ public class InitialSurveyCalculationService {
     private static final BigDecimal FIVE = BigDecimal.valueOf(5);
 
     public InitialSurveyCalculationResult calculate(InitialSurveyRequest request) {
+        // Extract answer values once so the calculation stays explicit and matches the agreed product formula.
         int q1Value = request.q1().value();
         int q2Value = request.q2().value();
         int q3Value = request.q3().value();
@@ -81,6 +82,7 @@ public class InitialSurveyCalculationService {
     }
 
     private int applyQ9Rule(int q9Value, int q6Value) {
+        // Q9 self-assessment is capped when the player does not meet the minimum Q6 experience threshold.
         if (q6Value < 2) {
             return Math.min(q9Value, 1);
         }
@@ -90,6 +92,7 @@ public class InitialSurveyCalculationService {
     private BigDecimal calculateRating(BigDecimal normalizedScore) {
         BigDecimal rating;
 
+        // The onboarding score uses a piecewise curve so low, mid, and top ranges spread differently.
         if (normalizedScore.compareTo(TEN) <= 0) {
             rating = BigDecimal.valueOf(1.00)
                     .add(normalizedScore.divide(TEN, 8, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(1.40)));
@@ -116,10 +119,12 @@ public class InitialSurveyCalculationService {
     private BigDecimal applyGates(BigDecimal rating, int q6Value, int q10Value) {
         BigDecimal gatedRating = rating;
 
+        // Primera requires both recent competitive context (Q10) and solid level signal (Q6).
         if (gatedRating.compareTo(BigDecimal.valueOf(6.40)) >= 0 && !(q10Value >= 3 && q6Value >= 3)) {
             gatedRating = gatedRating.min(BigDecimal.valueOf(6.39));
         }
 
+        // Segunda is never allowed when Q6 stays below the minimum threshold.
         if (gatedRating.compareTo(BigDecimal.valueOf(5.50)) >= 0 && q6Value < 2) {
             gatedRating = gatedRating.min(BigDecimal.valueOf(5.49));
         }

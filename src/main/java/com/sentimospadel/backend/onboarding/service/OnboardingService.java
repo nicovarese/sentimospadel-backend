@@ -28,6 +28,7 @@ public class OnboardingService {
 
     @Transactional
     public InitialSurveyResponse submitInitialSurvey(String email, InitialSurveyRequest request) {
+        // Onboarding stays separate from register, so the authenticated user is resolved here and linked to a profile.
         User user = getUserByEmail(email);
         PlayerProfile playerProfile = getOrCreatePlayerProfile(user);
 
@@ -59,6 +60,7 @@ public class OnboardingService {
 
         InitialSurveySubmission savedSubmission = initialSurveySubmissionRepository.save(submission);
 
+        // Mirror the current onboarding result on player_profiles so future reads do not need to derive it from history.
         playerProfile.setSurveyCompleted(true);
         playerProfile.setSurveyCompletedAt(savedSubmission.getCreatedAt());
         playerProfile.setInitialRating(result.initialRating());
@@ -91,6 +93,7 @@ public class OnboardingService {
     private PlayerProfile getOrCreatePlayerProfile(User user) {
         return playerProfileRepository.findByUserId(user.getId())
                 .orElseGet(() -> playerProfileRepository.save(PlayerProfile.builder()
+                        // This is a temporary bootstrap path until profile creation becomes an explicit user lifecycle step.
                         .user(user)
                         .fullName(deriveFullName(user.getEmail()))
                         .currentElo(1200)
@@ -132,6 +135,7 @@ public class OnboardingService {
     }
 
     private String deriveFullName(String email) {
+        // Derive a readable placeholder name from the email local-part for users that reach onboarding without a profile.
         String localPart = email == null ? "Player" : email.split("@", 2)[0];
         String normalized = localPart.replace('.', ' ').replace('_', ' ').replace('-', ' ').trim();
 

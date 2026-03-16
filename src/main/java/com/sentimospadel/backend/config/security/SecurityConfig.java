@@ -30,7 +30,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
-        // Temporary bootstrap configuration: keep endpoints open until the auth flow is introduced.
+        // Keep the API stateless and only protect the routes that already depend on the JWT-backed user context.
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -71,6 +71,7 @@ public class SecurityConfig {
     @ConditionalOnMissingBean(UserDetailsService.class)
     UserDetailsService bootstrapUserDetailsService() {
         return username -> {
+            // Startup should still work in test/bootstrap scenarios where JPA-backed auth is not available.
             throw new UsernameNotFoundException("Authentication is not configured yet");
         };
     }
