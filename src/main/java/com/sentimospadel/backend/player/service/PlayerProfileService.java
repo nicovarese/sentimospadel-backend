@@ -3,6 +3,7 @@ package com.sentimospadel.backend.player.service;
 import com.sentimospadel.backend.player.dto.PlayerProfileResponse;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
+import com.sentimospadel.backend.player.support.UruguayCategoryMapper;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -41,9 +42,11 @@ public class PlayerProfileService {
                 playerProfile.getDeclaredLevel(),
                 playerProfile.getCity(),
                 playerProfile.getBio(),
-                playerProfile.getCurrentElo(),
+                playerProfile.getCurrentRating(),
+                UruguayCategoryMapper.fromRating(playerProfile.getCurrentRating()),
                 playerProfile.isProvisional(),
                 playerProfile.getMatchesPlayed(),
+                playerProfile.getRatedMatchesCount(),
                 playerProfile.isSurveyCompleted(),
                 playerProfile.getSurveyCompletedAt(),
                 playerProfile.getInitialRating(),

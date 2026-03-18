@@ -5,12 +5,10 @@ import com.sentimospadel.backend.onboarding.dto.InitialSurveyResponse;
 import com.sentimospadel.backend.onboarding.entity.InitialSurveySubmission;
 import com.sentimospadel.backend.onboarding.repository.InitialSurveySubmissionRepository;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
 import com.sentimospadel.backend.shared.exception.DuplicateResourceException;
-import com.sentimospadel.backend.user.entity.User;
-import com.sentimospadel.backend.user.repository.UserRepository;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +19,7 @@ public class OnboardingService {
 
     private static final int CURRENT_SURVEY_VERSION = 1;
 
-    private final UserRepository userRepository;
+    private final PlayerProfileResolverService playerProfileResolverService;
     private final PlayerProfileRepository playerProfileRepository;
     private final InitialSurveySubmissionRepository initialSurveySubmissionRepository;
     private final InitialSurveyCalculationService initialSurveyCalculationService;
@@ -29,8 +27,7 @@ public class OnboardingService {
     @Transactional
     public InitialSurveyResponse submitInitialSurvey(String email, InitialSurveyRequest request) {
         // Onboarding stays separate from register, so the authenticated user is resolved here and linked to a profile.
-        User user = getUserByEmail(email);
-        PlayerProfile playerProfile = getOrCreatePlayerProfile(user);
+        PlayerProfile playerProfile = playerProfileResolverService.getOrCreateByUserEmail(email);
 
         if (playerProfile.isSurveyCompleted()) {
             throw new DuplicateResourceException("Initial survey has already been submitted for this player");
@@ -64,6 +61,7 @@ public class OnboardingService {
         playerProfile.setSurveyCompleted(true);
         playerProfile.setSurveyCompletedAt(savedSubmission.getCreatedAt());
         playerProfile.setInitialRating(result.initialRating());
+        playerProfile.setCurrentRating(result.initialRating());
         playerProfile.setEstimatedCategory(result.estimatedCategory());
         playerProfile.setRequiresClubVerification(result.requiresClubVerification());
         playerProfile.setClubVerificationStatus(result.clubVerificationStatus());
@@ -74,8 +72,9 @@ public class OnboardingService {
 
     @Transactional(readOnly = true)
     public InitialSurveyResponse getInitialSurvey(String email) {
-        User user = getUserByEmail(email);
-        PlayerProfile playerProfile = playerProfileRepository.findByUserId(user.getId())
+        PlayerProfile playerProfile = playerProfileRepository.findByUserId(
+                        playerProfileResolverService.getUserByEmail(email).getId()
+                )
                 .orElseThrow(() -> new ResourceNotFoundException("Player profile for the authenticated user was not found"));
 
         InitialSurveySubmission submission = initialSurveySubmissionRepository
@@ -83,26 +82,6 @@ public class OnboardingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Initial survey result for the authenticated user was not found"));
 
         return toResponse(submission, playerProfile);
-    }
-
-    private User getUserByEmail(String email) {
-        return userRepository.findByEmail(normalizeEmail(email))
-                .orElseThrow(() -> new ResourceNotFoundException("Authenticated user was not found"));
-    }
-
-    private PlayerProfile getOrCreatePlayerProfile(User user) {
-        return playerProfileRepository.findByUserId(user.getId())
-                .orElseGet(() -> playerProfileRepository.save(PlayerProfile.builder()
-                        // This is a temporary bootstrap path until profile creation becomes an explicit user lifecycle step.
-                        .user(user)
-                        .fullName(deriveFullName(user.getEmail()))
-                        .currentElo(1200)
-                        .provisional(true)
-                        .matchesPlayed(0)
-                        .surveyCompleted(false)
-                        .requiresClubVerification(false)
-                        .clubVerificationStatus(com.sentimospadel.backend.player.enums.ClubVerificationStatus.NOT_REQUIRED)
-                        .build()));
     }
 
     private InitialSurveyResponse toResponse(InitialSurveySubmission submission, PlayerProfile playerProfile) {
@@ -128,33 +107,5 @@ public class OnboardingService {
                 submission.getCreatedAt(),
                 submission.getUpdatedAt()
         );
-    }
-
-    private String normalizeEmail(String email) {
-        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String deriveFullName(String email) {
-        // Derive a readable placeholder name from the email local-part for users that reach onboarding without a profile.
-        String localPart = email == null ? "Player" : email.split("@", 2)[0];
-        String normalized = localPart.replace('.', ' ').replace('_', ' ').replace('-', ' ').trim();
-
-        if (normalized.isBlank()) {
-            return "Player";
-        }
-
-        String[] words = normalized.split("\\s+");
-        StringBuilder fullName = new StringBuilder();
-        for (int i = 0; i < words.length; i++) {
-            if (i > 0) {
-                fullName.append(' ');
-            }
-            String word = words[i];
-            fullName.append(Character.toUpperCase(word.charAt(0)));
-            if (word.length() > 1) {
-                fullName.append(word.substring(1).toLowerCase(Locale.ROOT));
-            }
-        }
-        return fullName.toString();
     }
 }

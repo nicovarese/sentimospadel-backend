@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -40,7 +41,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/onboarding/**").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

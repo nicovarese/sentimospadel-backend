@@ -3,6 +3,7 @@ package com.sentimospadel.backend.onboarding.service;
 import com.sentimospadel.backend.onboarding.dto.InitialSurveyRequest;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
+import com.sentimospadel.backend.player.support.UruguayCategoryMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.springframework.stereotype.Component;
@@ -60,25 +61,7 @@ public class InitialSurveyCalculationService {
     }
 
     UruguayCategory mapCategory(BigDecimal rating) {
-        if (rating.compareTo(BigDecimal.valueOf(6.40)) >= 0) {
-            return UruguayCategory.PRIMERA;
-        }
-        if (rating.compareTo(BigDecimal.valueOf(5.50)) >= 0) {
-            return UruguayCategory.SEGUNDA;
-        }
-        if (rating.compareTo(BigDecimal.valueOf(4.80)) >= 0) {
-            return UruguayCategory.TERCERA;
-        }
-        if (rating.compareTo(BigDecimal.valueOf(4.10)) >= 0) {
-            return UruguayCategory.CUARTA;
-        }
-        if (rating.compareTo(BigDecimal.valueOf(3.40)) >= 0) {
-            return UruguayCategory.QUINTA;
-        }
-        if (rating.compareTo(BigDecimal.valueOf(2.60)) >= 0) {
-            return UruguayCategory.SEXTA;
-        }
-        return UruguayCategory.SEPTIMA;
+        return UruguayCategoryMapper.fromRating(rating);
     }
 
     private int applyQ9Rule(int q9Value, int q6Value) {

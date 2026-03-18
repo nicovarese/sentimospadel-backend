@@ -1,10 +1,22 @@
 ALTER TABLE player_profiles
-    ADD COLUMN survey_completed BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN survey_completed_at TIMESTAMP WITH TIME ZONE,
-    ADD COLUMN initial_rating NUMERIC(4, 2),
-    ADD COLUMN estimated_category VARCHAR(20),
-    ADD COLUMN requires_club_verification BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN club_verification_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUIRED',
+    ADD COLUMN survey_completed BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE player_profiles
+    ADD COLUMN survey_completed_at TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE player_profiles
+    ADD COLUMN initial_rating NUMERIC(4, 2);
+
+ALTER TABLE player_profiles
+    ADD COLUMN estimated_category VARCHAR(20);
+
+ALTER TABLE player_profiles
+    ADD COLUMN requires_club_verification BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE player_profiles
+    ADD COLUMN club_verification_status VARCHAR(20) NOT NULL DEFAULT 'NOT_REQUIRED';
+
+ALTER TABLE player_profiles
     ADD COLUMN public_category_visible BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE initial_survey_submissions (

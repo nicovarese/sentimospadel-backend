@@ -62,14 +62,17 @@ public class PlayerProfile extends BaseEntity {
     @Column(name = "bio", length = 1000)
     private String bio;
 
-    @Column(name = "current_elo", nullable = false)
-    private Integer currentElo;
+    @Column(name = "current_rating", nullable = false, precision = 4, scale = 2)
+    private BigDecimal currentRating;
 
     @Column(name = "provisional", nullable = false)
     private boolean provisional;
 
     @Column(name = "matches_played", nullable = false)
     private Integer matchesPlayed;
+
+    @Column(name = "rated_matches_count", nullable = false)
+    private Integer ratedMatchesCount;
 
     @Column(name = "survey_completed", nullable = false)
     private boolean surveyCompleted;

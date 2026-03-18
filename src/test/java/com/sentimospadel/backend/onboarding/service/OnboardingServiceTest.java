@@ -15,25 +15,22 @@ import com.sentimospadel.backend.onboarding.repository.InitialSurveySubmissionRe
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
+import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
-import com.sentimospadel.backend.user.entity.User;
-import com.sentimospadel.backend.user.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class OnboardingServiceTest {
 
     @Mock
-    private UserRepository userRepository;
+    private PlayerProfileResolverService playerProfileResolverService;
 
     @Mock
     private PlayerProfileRepository playerProfileRepository;
@@ -49,7 +46,7 @@ class OnboardingServiceTest {
     @BeforeEach
     void setUp() {
         onboardingService = new OnboardingService(
-                userRepository,
+                playerProfileResolverService,
                 playerProfileRepository,
                 initialSurveySubmissionRepository,
                 initialSurveyCalculationService
@@ -58,20 +55,15 @@ class OnboardingServiceTest {
 
     @Test
     void submitInitialSurveyCreatesMissingPlayerProfileAndPersistsCurrentResult() {
-        User user = User.builder()
-                .email("player@example.com")
+        PlayerProfile playerProfile = PlayerProfile.builder()
+                .fullName("Player")
+                .currentRating(new BigDecimal("1.00"))
+                .provisional(true)
+                .matchesPlayed(0)
+                .ratedMatchesCount(0)
                 .build();
-        ReflectionTestUtils.setField(user, "id", 10L);
-
-        when(userRepository.findByEmail("player@example.com")).thenReturn(Optional.of(user));
-        when(playerProfileRepository.findByUserId(10L)).thenReturn(Optional.empty());
-        when(playerProfileRepository.save(any(PlayerProfile.class))).thenAnswer(invocation -> {
-            PlayerProfile profile = invocation.getArgument(0);
-            if (profile.getId() == null) {
-                ReflectionTestUtils.setField(profile, "id", 20L);
-            }
-            return profile;
-        });
+        when(playerProfileResolverService.getOrCreateByUserEmail("player@example.com")).thenReturn(playerProfile);
+        when(playerProfileRepository.save(any(PlayerProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         InitialSurveyCalculationResult calculationResult = new InitialSurveyCalculationResult(
                 126,
@@ -106,14 +98,15 @@ class OnboardingServiceTest {
         InitialSurveyResponse response = onboardingService.submitInitialSurvey("player@example.com", request);
 
         ArgumentCaptor<PlayerProfile> profileCaptor = ArgumentCaptor.forClass(PlayerProfile.class);
-        verify(playerProfileRepository, org.mockito.Mockito.times(2)).save(profileCaptor.capture());
-        PlayerProfile persistedProfile = profileCaptor.getAllValues().get(1);
+        verify(playerProfileRepository).save(profileCaptor.capture());
+        PlayerProfile persistedProfile = profileCaptor.getValue();
 
         assertTrue(persistedProfile.isSurveyCompleted());
         assertEquals(ClubVerificationStatus.PENDING, persistedProfile.getClubVerificationStatus());
         assertEquals(new BigDecimal("5.52"), persistedProfile.getInitialRating());
+        assertEquals(new BigDecimal("5.52"), persistedProfile.getCurrentRating());
         assertEquals(UruguayCategory.SEGUNDA, persistedProfile.getEstimatedCategory());
-        assertEquals("Player", profileCaptor.getAllValues().get(0).getFullName());
+        assertEquals("Player", persistedProfile.getFullName());
 
         assertEquals(new BigDecimal("5.52"), response.initialRating());
         assertEquals(UruguayCategory.SEGUNDA, response.estimatedCategory());

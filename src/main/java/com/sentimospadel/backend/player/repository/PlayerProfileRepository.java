@@ -17,4 +17,7 @@ public interface PlayerProfileRepository extends JpaRepository<PlayerProfile, Lo
 
     @EntityGraph(attributePaths = "user")
     Optional<PlayerProfile> findByUserId(Long userId);
+
+    @EntityGraph(attributePaths = "user")
+    java.util.List<PlayerProfile> findAllByOrderByCurrentRatingDescFullNameAsc();
 }
