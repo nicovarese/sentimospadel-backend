@@ -1,5 +1,133 @@
 # Progress Log
 
+## 2026-03-24
+
+### Summary
+- Completed a focused frontend/backend e2e-completion audit based on the current visible frontend surface
+- Added a practical manual QA checklist for the currently integrated frontend/backend flows
+- Finished the remaining high-value frontend wiring gaps that already had backend support:
+  - tournament `LEAGUE` explorer/list read path
+  - tournament `LEAGUE` join/leave surfacing in the existing card CTA
+  - club explorer/catalog read path for the reservation flow
+  - social match leave/cancel surfacing in the existing match-card CTA
+- Kept frontend visual structure intact and limited changes to adapters, state wiring, and existing button behavior
+
+### Current Integration Status
+- The frontend now uses real backend data for:
+  - auth/session
+  - onboarding
+  - player profile hydration
+  - social match create/join/leave/cancel/result flow
+  - player match history with scopes
+  - rankings
+  - rating history
+  - tournament `LEAGUE` explorer/list
+  - tournament `LEAGUE` create/entry sync/launch/generated matches/result flow/standings/join/leave
+  - club list used by the reservation flow
+- The main frontend-visible areas still intentionally mock or only partially integrated are:
+  - club rankings
+  - top partners
+  - top rivals
+  - club dashboard operational data
+  - coaches / premium helper flows
+  - `ELIMINATION` / `AMERICANO`
+
+### Likely Next Steps
+- Decide whether to keep current mock-only profile/club extras as demo-only for QA or to open backend scope for them
+- If staying within current product scope, focus next on small polish/read gaps rather than new feature slices
+- If tournament work continues, choose between deeper `LEAGUE` read/detail polish and broader tournament-mode support
+- If social-match UX continues, consider whether exposing additional backend actions or filters materially improves QA coverage
+
+## 2026-03-23
+
+### Summary
+- Completed a frontend/backend integration audit across the local `backend/` and `frontend/` repositories
+- Confirmed that the backend is already the effective source of truth for auth, onboarding, match lifecycle, result workflow, rating, and rankings
+- Identified that the current frontend still behaves as a prototype with local mocks, local business logic, and legacy Supabase assumptions
+- Added a typed frontend API client aligned to the current backend contracts as the first migration step away from mock-only state
+- Corrected the frontend onboarding and top-category messaging so Primera/Segunda remain visible and only carry pending verification state
+- Integrated frontend auth and onboarding against the real backend while preserving the existing UI flow
+- Integrated the frontend social-match critical path against the real backend lifecycle without redesigning match screens
+- Integrated the frontend national ranking and player rating-history views against backend ranking/history endpoints
+- Added lightweight `scope` filters to `GET /api/players/me/matches` so the frontend can segment the authenticated player's match history more naturally
+- Implemented the first tournament foundations slice with create/list/detail/join/leave
+- Audited frontend/backend tournament mismatch in detail and documented the staged plan in `/docs/tournament-frontend-backend-alignment.md`
+- Extended the backend tournament model to align with the current frontend expectations around formats, launch semantics, team entries, and tournament-specific match state
+- Implemented the first operational tournament slice for `LEAGUE`:
+  - creator entry sync
+  - launch
+  - generated league fixtures
+  - tournament-match result submit/confirm/reject
+  - live standings read
+
+### Key Integration Findings
+- Backend endpoints already exist for the main live slices:
+  - auth
+  - onboarding survey
+  - rankings
+  - player rating history
+  - player match history
+  - social match lifecycle
+- The main gap is frontend wiring, not backend endpoint availability
+- The frontend currently duplicates backend-owned logic in:
+  - onboarding score calculation
+  - category mapping
+  - match rating progression
+  - parts of match/result lifecycle state
+- Frontend match/status assumptions still differ materially from backend contracts
+- The old hidden-visibility interpretation for Primera/Segunda was still present in the frontend and was corrected in this pass
+
+### Current Backend / Integration Status
+- Backend contracts did not require redesign in this pass
+- The frontend/backend audit report is available in `/docs/frontend-backend-integration-audit.md` at the workspace root
+- A typed frontend backend client now exists as the first contract-alignment layer
+- No backend business-rule changes were required specifically for this integration pass
+- The frontend auth/onboarding integration report is available in `/docs/frontend-backend-auth-onboarding-integration.md`
+- The frontend match integration report is available in `/docs/frontend-backend-matches-integration.md`
+- The frontend ranking/history integration report is available in `/docs/frontend-backend-ranking-history-integration.md`
+- The current frontend now uses backend as the official source of truth for:
+  - auth session state
+  - onboarding result
+  - social match lifecycle state
+  - ranking order
+  - player rating history
+- `GET /api/players/me/matches` now supports lightweight `scope` filters for `upcoming`, `completed`, `cancelled`, and `pending_result`
+- Tournament audit report now exists at `/docs/tournament-frontend-backend-alignment.md`
+- Tournament backend now understands:
+  - `LEAGUE`
+  - `ELIMINATION`
+  - `AMERICANO`
+- Tournament metadata now includes open vs closed enrollment intent, competitive/recreational intent, launch config, and standings tiebreak
+- Tournament entries are no longer limited to single-player registrations
+- Tournament entries now support team-style registration with:
+  - primary player
+  - optional secondary player
+  - team name
+  - optional time preferences
+- Tournament creator can now synchronize entries through `PUT /api/tournaments/{id}/entries`
+- Tournament creator can now launch through `POST /api/tournaments/{id}/launch`
+- Tournament-generated matches now exist as a backend domain separate from social matches
+- `GET /api/tournaments/{id}/matches` now exists
+- `POST /api/tournaments/{id}/matches/{matchId}/result` now exists
+- `POST /api/tournaments/{id}/matches/{matchId}/result/confirm` now exists
+- `POST /api/tournaments/{id}/matches/{matchId}/result/reject` now exists
+- `GET /api/tournaments/{id}/standings` now exists
+- Tournament-generated matches do not affect official player rating
+- Only `LEAGUE` is operational after launch in this pass
+- League launch currently generates double round-robin fixtures only
+- League standings are now calculated from confirmed tournament results with backend-owned `3-1-0` scoring
+- Elimination bracket generation is still pending
+- Americano operational pairing is still pending
+- Advanced scheduling across courts/tournaments is still pending
+
+### Likely Next Steps
+- Consider wiring public player rating history to `GET /api/players/{id}/rating-history` only if the profile UX actually requires it
+- Integrate the current frontend tournament screens against the new backend contracts through adapters instead of local tournament state
+- Build the next tournament slice:
+  - elimination bracket generation
+  - americano operational engine
+  - richer scheduling heuristics across available courts
+
 ## 2026-03-17
 
 ### Summary
@@ -169,6 +297,11 @@
 - `GET /api/players/me/rating-history` is now available
 - `GET /api/players/{id}/rating-history` is now available
 - `GET /api/players/me/matches` is now available
+- Frontend/backend integration for social matches was completed against the existing backend contracts
+- The current frontend now uses real backend reads for player match history and match discovery
+- The current frontend now uses backend as the official source of truth for social match create/join/result submit/result confirm/result reject
+- The current frontend no longer applies official social-match rating changes locally
+- Dedicated visible frontend controls for leave/cancel/manual team assignment are still pending and remain likely follow-up work
 - DB-backed integration tests now validate Flyway migrations plus the confirmed result -> rating update -> rating history flow
 - Club verification workflow itself is still not implemented
 - Duplicate email registration is rejected cleanly
@@ -182,6 +315,7 @@
 - Add the next stability slice around result amendment/dispute refinement if product still needs it
 - Add optional filter/query support on player-facing match history if product starts needing tabs like upcoming/completed/cancelled
 - Extend persistence-backed integration tests around rating-history reads and match lifecycle edge cases
+- Finish wiring ranking/history screens to the real backend endpoints now that social-match reads/actions are integrated
 - After lightweight filters on `/api/players/me/matches`, start tournament foundations
 
 ### Roadmap
