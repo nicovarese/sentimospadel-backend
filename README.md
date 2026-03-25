@@ -51,8 +51,9 @@ If `8080` is free and you prefer the default port:
 - `club`
 - `match`
 - `rating`
+- `tournament`
 
-Future modules such as tournament, reservation, payment, and notification are intentionally not implemented yet.
+Future modules such as reservation, payment, and notification are intentionally not implemented yet.
 
 ## Available Endpoints
 - `GET /api/health`
@@ -76,6 +77,18 @@ Future modules such as tournament, reservation, payment, and notification are in
 - `GET /api/players/me/rating-history`
 - `GET /api/players/me/matches`
 - `GET /api/players/{id}/rating-history`
+- `POST /api/tournaments`
+- `POST /api/tournaments/{id}/join`
+- `POST /api/tournaments/{id}/leave`
+- `PUT /api/tournaments/{id}/entries`
+- `POST /api/tournaments/{id}/launch`
+- `GET /api/tournaments`
+- `GET /api/tournaments/{id}`
+- `GET /api/tournaments/{id}/matches`
+- `POST /api/tournaments/{id}/matches/{matchId}/result`
+- `POST /api/tournaments/{id}/matches/{matchId}/result/confirm`
+- `POST /api/tournaments/{id}/matches/{matchId}/result/reject`
+- `GET /api/tournaments/{id}/standings`
 - `GET /api/users`
 - `GET /api/users/{id}`
 - `GET /api/players`
@@ -99,8 +112,12 @@ Future modules such as tournament, reservation, payment, and notification are in
 - Match team assignment, result confirmation, and result rejection are also JWT-protected
 - `GET /api/players/me/rating-history` is JWT-protected
 - `GET /api/players/me/matches` is JWT-protected
+- Tournament create/join/leave are JWT-protected
+- Tournament creator entry sync and launch are JWT-protected
+- Tournament match result submit/confirm/reject are JWT-protected
 - Match list/detail endpoints are readable without JWT in this first slice
 - `GET /api/players/{id}/rating-history` is public in this slice
+- Tournament list/detail endpoints are public in this first slice
 
 Example login request:
 ```json
@@ -230,9 +247,49 @@ Current match rules:
 
 ## Player Match History
 - `GET /api/players/me/matches` returns the authenticated player's match history ordered by `scheduledAt` descending
+- `GET /api/players/me/matches?scope=upcoming|completed|cancelled|pending_result` applies a lightweight server-side filter without changing the response shape
 - Each entry includes the match summary, participant list, team assignment if present, result summary if present, and whether the authenticated player won when there is a confirmed result
 - This gives the frontend a direct navigation path between player profile, match history, and rating history
-- Status/scope filters are intentionally not implemented yet in this first read slice
+- `upcoming` means not cancelled, not completed, and scheduled in the future
+- `completed` means `COMPLETED`
+- `cancelled` means `CANCELLED`
+- `pending_result` means `RESULT_PENDING`
+- Invalid scope values return `400 Bad Request`
+
+## Tournament Foundations
+- `POST /api/tournaments` creates a tournament for the authenticated player
+- `GET /api/tournaments` lists tournaments
+- `GET /api/tournaments/{id}` returns tournament detail
+- `POST /api/tournaments/{id}/join` registers the authenticated player in an `OPEN` tournament
+- `POST /api/tournaments/{id}/leave` removes the authenticated player from an `OPEN` tournament if already registered
+- `PUT /api/tournaments/{id}/entries` lets the creator synchronize explicit team entries, team names, and optional time preferences
+- `POST /api/tournaments/{id}/launch` launches the tournament
+- `GET /api/tournaments/{id}/matches` returns generated tournament matches
+- `POST /api/tournaments/{id}/matches/{matchId}/result` submits a tournament-match result
+- `POST /api/tournaments/{id}/matches/{matchId}/result/confirm` confirms a pending tournament-match result
+- `POST /api/tournaments/{id}/matches/{matchId}/result/reject` rejects a pending tournament-match result
+- `GET /api/tournaments/{id}/standings` returns league standings from confirmed tournament results
+
+Current tournament rules:
+- Tournament metadata now distinguishes `LEAGUE`, `ELIMINATION`, and `AMERICANO`
+- Tournament entries now support:
+  - primary player
+  - optional secondary player
+  - team name
+  - optional time preferences
+- Self-join still works for `OPEN` tournaments and creates a partial entry when the format expects pairs
+- Only the creator can synchronize entries and launch the tournament
+- Launch closes self-enrollment and moves the tournament to `IN_PROGRESS`
+- In this backend slice, only `LEAGUE` is operational after launch
+- League launch currently generates double round-robin fixtures only
+- Tournament-generated matches are stored separately from social matches
+- Tournament-generated match results do not update official player rating
+- Confirmed tournament results update tournament standings only
+- The current league points interpretation is `3-1-0`:
+  - winner gets `3`
+  - loser gets `1` if they win at least one set
+  - loser gets `0` otherwise
+- Bracket generation, americano pairing, and advanced scheduling are still pending
 
 ## Project Structure
 ```text
@@ -245,7 +302,8 @@ src/main/java/com/sentimospadel/backend
   club/
   onboarding/
   match/
-
+  rating/
+  tournament/
 src/main/resources
   application.yml
   db/migration/
@@ -269,6 +327,8 @@ src/main/resources
 - The first rating slice now updates player ratings from confirmed social match results on the official `1.00..7.00` scale
 - Rating history now exists, rating history read endpoints are available, and `GET /api/rankings` is available
 - Player-facing match history is now available through `GET /api/players/me/matches`
+- Tournament backend now supports richer metadata, team-style entries, creator entry sync, explicit launch, generated league fixtures, tournament-match result workflow, and league standings
+- Elimination brackets, americano pairing, and advanced tournament scheduling are intentionally not implemented yet
 - DB-backed integration tests now cover Flyway + confirmed result -> rating update -> history persistence
 - Tournament ranking logic is intentionally not implemented yet
 - Refresh tokens are intentionally not implemented yet

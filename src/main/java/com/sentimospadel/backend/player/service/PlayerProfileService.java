@@ -15,6 +15,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlayerProfileService {
 
     private final PlayerProfileRepository playerProfileRepository;
+    private final PlayerProfileResolverService playerProfileResolverService;
+
+    @Transactional(readOnly = true)
+    public PlayerProfileResponse getMyPlayerProfile(String email) {
+        Long userId = playerProfileResolverService.getUserByEmail(email).getId();
+
+        PlayerProfile playerProfile = playerProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Player profile for the authenticated user was not found"));
+
+        return toResponse(playerProfile);
+    }
 
     @Transactional(readOnly = true)
     public PlayerProfileResponse getPlayerProfileById(Long id) {

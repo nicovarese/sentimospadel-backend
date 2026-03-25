@@ -45,43 +45,43 @@ public class InitialSurveySubmission extends BaseEntity {
     private Integer surveyVersion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q1", nullable = false, length = 1)
+    @Column(name = "q1", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q1;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q2", nullable = false, length = 1)
+    @Column(name = "q2", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q2;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q3", nullable = false, length = 1)
+    @Column(name = "q3", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q3;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q4", nullable = false, length = 1)
+    @Column(name = "q4", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q4;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q5", nullable = false, length = 1)
+    @Column(name = "q5", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q5;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q6", nullable = false, length = 1)
+    @Column(name = "q6", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q6;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q7", nullable = false, length = 1)
+    @Column(name = "q7", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q7;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q8", nullable = false, length = 1)
+    @Column(name = "q8", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q8;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q9", nullable = false, length = 1)
+    @Column(name = "q9", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q9;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "q10", nullable = false, length = 1)
+    @Column(name = "q10", nullable = false, length = 1, columnDefinition = "varchar(1)")
     private AnswerOption q10;
 
     @Column(name = "weighted_score", nullable = false)

@@ -1,10 +1,27 @@
 # Progress Log
 
+## 2026-03-25
+
+### Summary
+- Fixed local development CORS for frontend/backend integration on `/api/**`
+- Expanded the explicit local dev origin allowlist to cover `localhost` and `127.0.0.1` on ports `3000..3005`
+- Confirmed that backend preflight `OPTIONS` requests now succeed for local frontend dev origins while keeping credentialed requests origin-scoped
+- Fixed the backend auth wiring bug that prevented a freshly registered user from logging in immediately afterward
+
+### Current Local Dev Status
+- Local frontend dev origins such as `http://127.0.0.1:3003` and `http://localhost:3004` are now allowed for `/api/**`
+- Allowed methods include `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`
+- Allowed request headers include `Authorization` and `Content-Type`
+- Security remains stateless and JWT-protected routes continue to behave as before
+- Preflight requests are explicitly permitted for `/api/**`
+- `register -> login -> /api/auth/me` now works end-to-end against the real backend
+
 ## 2026-03-24
 
 ### Summary
 - Completed a focused frontend/backend e2e-completion audit based on the current visible frontend surface
 - Added a practical manual QA checklist for the currently integrated frontend/backend flows
+- Fixed the backend local startup blocker caused by a Hibernate/Flyway type mismatch on onboarding survey answer columns (`initial_survey_submissions.q1..q10`)
 - Finished the remaining high-value frontend wiring gaps that already had backend support:
   - tournament `LEAGUE` explorer/list read path
   - tournament `LEAGUE` join/leave surfacing in the existing card CTA

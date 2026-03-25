@@ -10,11 +10,13 @@ import com.sentimospadel.backend.match.entity.MatchResult;
 import com.sentimospadel.backend.match.enums.MatchParticipantTeam;
 import com.sentimospadel.backend.match.enums.MatchResultStatus;
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
+import com.sentimospadel.backend.match.enums.PlayerMatchHistoryScope;
 import com.sentimospadel.backend.match.repository.MatchParticipantRepository;
 import com.sentimospadel.backend.match.repository.MatchResultRepository;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -36,18 +38,28 @@ public class PlayerMatchHistoryService {
     private final MatchResultRepository matchResultRepository;
 
     @Transactional(readOnly = true)
-    public List<PlayerMatchHistoryEntryResponse> getMyMatches(String email) {
+    public List<PlayerMatchHistoryEntryResponse> getMyMatches(String email, PlayerMatchHistoryScope scope) {
         Long userId = playerProfileResolverService.getUserByEmail(email).getId();
 
         return playerProfileRepository.findByUserId(userId)
-                .map(playerProfile -> getMatchesForPlayerProfile(playerProfile.getId()))
+                .map(playerProfile -> getMatchesForPlayerProfile(playerProfile.getId(), scope))
                 .orElseGet(Collections::emptyList);
     }
 
     @Transactional(readOnly = true)
-    public List<PlayerMatchHistoryEntryResponse> getMatchesForPlayerProfile(Long playerProfileId) {
+    public List<PlayerMatchHistoryEntryResponse> getMatchesForPlayerProfile(
+            Long playerProfileId,
+            PlayerMatchHistoryScope scope
+    ) {
         List<MatchParticipant> playerParticipations =
                 matchParticipantRepository.findAllByPlayerProfileIdOrderByMatchScheduledAtDesc(playerProfileId);
+
+        if (scope != null) {
+            Instant now = Instant.now();
+            playerParticipations = playerParticipations.stream()
+                    .filter(participation -> scope.includes(participation.getMatch(), now))
+                    .toList();
+        }
 
         if (playerParticipations.isEmpty()) {
             return List.of();

@@ -1,5 +1,6 @@
 package com.sentimospadel.backend.player.controller;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,6 +14,7 @@ import com.sentimospadel.backend.match.enums.MatchParticipantTeam;
 import com.sentimospadel.backend.match.enums.MatchResultStatus;
 import com.sentimospadel.backend.match.enums.MatchStatus;
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
+import com.sentimospadel.backend.match.enums.PlayerMatchHistoryScope;
 import com.sentimospadel.backend.match.service.PlayerMatchHistoryService;
 import com.sentimospadel.backend.player.dto.PlayerProfileResponse;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
@@ -64,6 +66,12 @@ class PlayerProfileControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addFilters(new MeAuthenticationRequiredFilter())
                 .build();
+    }
+
+    @Test
+    void myProfileRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -128,8 +136,45 @@ class PlayerProfileControllerTest {
     }
 
     @Test
+    void myProfileReturnsAuthenticatedPlayerProfile() throws Exception {
+        when(playerProfileService.getMyPlayerProfile("player@example.com")).thenReturn(
+                new PlayerProfileResponse(
+                        10L,
+                        100L,
+                        "Player One",
+                        null,
+                        null,
+                        null,
+                        "Montevideo",
+                        null,
+                        new BigDecimal("4.82"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        12,
+                        7,
+                        true,
+                        Instant.parse("2026-03-17T10:00:00Z"),
+                        new BigDecimal("4.60"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        ClubVerificationStatus.NOT_REQUIRED,
+                        Instant.parse("2026-03-16T10:00:00Z"),
+                        Instant.parse("2026-03-18T10:00:00Z")
+                )
+        );
+
+        mockMvc.perform(get("/api/players/me")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.fullName").value("Player One"))
+                .andExpect(jsonPath("$.currentRating").value(4.82))
+                .andExpect(jsonPath("$.currentCategory").value("TERCERA"));
+    }
+
+    @Test
     void myMatchesReturnsAuthenticatedPlayerMatchHistory() throws Exception {
-        when(playerMatchHistoryService.getMyMatches("player@example.com")).thenReturn(List.of(
+        when(playerMatchHistoryService.getMyMatches("player@example.com", null)).thenReturn(List.of(
                 new PlayerMatchHistoryEntryResponse(
                         55L,
                         MatchStatus.COMPLETED,
@@ -173,11 +218,36 @@ class PlayerProfileControllerTest {
                 .andExpect(jsonPath("$[0].result.status").value("CONFIRMED"));
     }
 
+    @Test
+    void myMatchesAcceptsScopeFilter() throws Exception {
+        when(playerMatchHistoryService.getMyMatches("player@example.com", PlayerMatchHistoryScope.UPCOMING))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/players/me/matches")
+                        .queryParam("scope", "upcoming")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk());
+
+        verify(playerMatchHistoryService).getMyMatches("player@example.com", PlayerMatchHistoryScope.UPCOMING);
+    }
+
+    @Test
+    void myMatchesRejectsInvalidScope() throws Exception {
+        mockMvc.perform(get("/api/players/me/matches")
+                        .queryParam("scope", "later")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Invalid match scope. Supported values: upcoming, completed, cancelled, pending_result"
+                ));
+    }
+
     private static class MeAuthenticationRequiredFilter extends OncePerRequestFilter {
 
         @Override
         protected boolean shouldNotFilter(HttpServletRequest request) {
-            return !request.getRequestURI().startsWith("/api/players/me/");
+            String uri = request.getRequestURI();
+            return !uri.equals("/api/players/me") && !uri.startsWith("/api/players/me/");
         }
 
         @Override

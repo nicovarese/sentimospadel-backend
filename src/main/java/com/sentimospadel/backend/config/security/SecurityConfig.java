@@ -2,19 +2,18 @@ package com.sentimospadel.backend.config.security;
 
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.repository.UserRepository;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -24,15 +23,36 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
+    private static final List<String> LOCAL_DEV_ORIGINS = List.of(
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+            "http://localhost:3002",
+            "http://127.0.0.1:3002",
+            "http://localhost:3003",
+            "http://127.0.0.1:3003",
+            "http://localhost:3004",
+            "http://127.0.0.1:3004",
+            "http://localhost:3005",
+            "http://127.0.0.1:3005"
+    );
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         // Keep the API stateless and only protect the routes that already depend on the JWT-backed user context.
         http
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -40,9 +60,21 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me/**").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me", "/api/players/me/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/tournaments",
+                                "/api/tournaments/*/join",
+                                "/api/tournaments/*/leave",
+                                "/api/tournaments/*/launch",
+                                "/api/tournaments/*/matches/*/result",
+                                "/api/tournaments/*/matches/*/result/confirm",
+                                "/api/tournaments/*/matches/*/result/reject"
+                        ).authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/entries").authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -57,25 +89,35 @@ public class SecurityConfig {
     }
 
     @Bean
-    AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(LOCAL_DEV_ORIGINS);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
     }
 
     @Bean
-    @ConditionalOnBean(UserRepository.class)
+    AuthenticationManager authenticationManager(DaoAuthenticationProvider authenticationProvider) {
+        return new ProviderManager(authenticationProvider);
+    }
+
+    @Bean
+    DaoAuthenticationProvider daoAuthenticationProvider(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider(userDetailsService);
+        authenticationProvider.setPasswordEncoder(passwordEncoder);
+        return authenticationProvider;
+    }
+
+    @Bean
     UserDetailsService userDetailsService(UserRepository userRepository) {
         return username -> userRepository.findByEmail(normalizeEmail(username))
                 .map(this::toUserDetails)
                 .orElseThrow(() -> new UsernameNotFoundException("User with email " + username + " was not found"));
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(UserDetailsService.class)
-    UserDetailsService bootstrapUserDetailsService() {
-        return username -> {
-            // Startup should still work in test/bootstrap scenarios where JPA-backed auth is not available.
-            throw new UsernameNotFoundException("Authentication is not configured yet");
-        };
     }
 
     private UserDetails toUserDetails(User user) {
