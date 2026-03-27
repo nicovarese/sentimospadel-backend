@@ -1,20 +1,73 @@
 # Progress Log
 
+## 2026-03-26
+
+### Summary
+- Added the first real club-admin context by linking `ADMIN` users to a single managed club through `users.managed_club_id`
+- Added backend persistence for club operations:
+  - `club_courts`
+  - `club_agenda_slot_overrides`
+  - `club_activity_logs`
+- Added a seeded club admin user plus initial courts, agenda overrides, and recent club activity so `Club View` can be tested without hand-loading everything from the UI
+- Implemented the first real club management endpoints:
+  - `GET /api/clubs/me/management/dashboard`
+  - `GET /api/clubs/me/management/users`
+  - `GET /api/clubs/me/management/agenda?date=YYYY-MM-DD`
+  - `POST /api/clubs/me/management/agenda/slot-action`
+  - `POST /api/clubs/me/management/quick-actions`
+- Rewired the current frontend `ClubDashboardView`, `ClubUsersView`, and `ClubAgendaView` to consume those backend endpoints while preserving the current visual language and navigation
+- Kept the club dashboard slice intentionally scoped to one managed club per admin user, without opening multi-club admin or payments scope yet
+
+### Current Club Management Status
+- `Club View` is now backend-driven for:
+  - dashboard summary cards
+  - recent activity
+  - club user metrics
+  - top users of the month
+  - per-court agenda
+  - manual reserve / block / free actions
+  - quick actions that persist operational activity
+- The dashboard revenue-like metric is currently an operational proxy based on occupied 90-minute slots and court hourly rates, because there is still no payments domain
+- Non-admin users or admins without a managed club now see a clean backend-driven no-access state instead of club mocks
+
+### Likely Next Steps
+- Decide whether the `Club View` tab should remain visible for non-admin users or be gated once product wants stricter role-based navigation
+- If club operations continue, add richer reservation semantics and real payment/revenue modeling instead of the current operational proxy
+- Continue the mock-removal effort in the remaining visible product areas:
+  - tournament modes beyond `LEAGUE`
+  - profile/club extras that are still demo-only
+  - any remaining legacy local data paths in `App.tsx`
+
 ## 2026-03-25
 
 ### Summary
+- Added a dedicated historical seed slice for Felipe Rodriguez with older confirmed social matches, mixed wins/losses, and persisted rating-history rows so frontend QA can inspect recent results and rating movement without recreating the whole path from the UI
+- Added backend-driven result eligibility based on real match end time (`scheduledAt + 90 minutes`) instead of surfacing result entry immediately when a social match becomes `FULL` or a tournament match is merely `SCHEDULED`
+- Added `GET /api/players/me/pending-actions` so the frontend can read a unified pending tray for result submit/confirm across social matches and `LEAGUE` tournament matches
+- Added persistent `player_notifications` storage with `UNREAD/READ` state plus references to social matches and tournament matches
+- Added `GET /api/notifications` and `POST /api/notifications/{id}/read` as the first backend notification read path, still without mobile push
+- Updated social/tournament result submission rules so backend rejects early result submission before the scheduled match has actually ended
+- Rewired the frontend result-entry official path to use backend pending actions instead of treating `FULL` / `SCHEDULED` as immediate result-ready states
+- Kept the current result UX intact by reusing the existing `ResultInputCard` modal/card flow instead of redesigning the app
 - Fixed local development CORS for frontend/backend integration on `/api/**`
 - Expanded the explicit local dev origin allowlist to cover `localhost` and `127.0.0.1` on ports `3000..3005`
 - Confirmed that backend preflight `OPTIONS` requests now succeed for local frontend dev origins while keeping credentialed requests origin-scoped
 - Fixed the backend auth wiring bug that prevented a freshly registered user from logging in immediately afterward
+- Seeded the initial real club catalog through Flyway using the exact legacy frontend mock clubs so local/frontend testing no longer depends on a hardcoded club list
+- Added a QA seed migration with pre-onboarded players plus social matches in useful test states so local manual testing no longer depends on creating every actor and match from the UI
 
 ### Current Local Dev Status
+- Social/tournament result submission is now officially enabled only after the scheduled match end time
+- Pending result actions now come from backend instead of frontend-local status assumptions
+- Persistent notifications now exist for active result actions and can be marked as read
 - Local frontend dev origins such as `http://127.0.0.1:3003` and `http://localhost:3004` are now allowed for `/api/**`
 - Allowed methods include `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`
 - Allowed request headers include `Authorization` and `Content-Type`
 - Security remains stateless and JWT-protected routes continue to behave as before
 - Preflight requests are explicitly permitted for `/api/**`
 - `register -> login -> /api/auth/me` now works end-to-end against the real backend
+- The `/api/clubs` catalog now returns a deterministic DB-backed seed list in insertion order for local QA
+- The local database now also includes seeded QA users, completed onboarding submissions, and seeded social matches for manual end-to-end testing
 
 ## 2026-03-24
 
@@ -314,13 +367,29 @@
 - `GET /api/players/me/rating-history` is now available
 - `GET /api/players/{id}/rating-history` is now available
 - `GET /api/players/me/matches` is now available
+- `GET /api/players/me/top-partners` is now available
+- `GET /api/players/me/top-rivals` is now available
+- `GET /api/players/me/club-rankings` is now available
+- `GET /api/coaches` is now available
 - Frontend/backend integration for social matches was completed against the existing backend contracts
 - The current frontend now uses real backend reads for player match history and match discovery
 - The current frontend now uses backend as the official source of truth for social match create/join/result submit/result confirm/result reject
 - The current frontend no longer applies official social-match rating changes locally
+- The current frontend profile analytics now use backend as the official source of truth for:
+  - top partners
+  - top rivals
+  - club rankings
+- The current frontend coaches screen now uses real backend data instead of local mock coaches
 - Dedicated visible frontend controls for leave/cancel/manual team assignment are still pending and remain likely follow-up work
 - DB-backed integration tests now validate Flyway migrations plus the confirmed result -> rating update -> rating history flow
+- Added dedicated QA seed scenarios for manual testing:
+  - `QA Social Join`
+  - `QA Social Submit`
+  - `QA Social Validacion`
+  - `Liga QA Abierta`
+  - `Liga QA En Curso`
 - Club verification workflow itself is still not implemented
+- Club operational dashboard / courts / reservations are still pending a real backend model and admin context
 - Duplicate email registration is rejected cleanly
 - Refresh tokens are still pending
 - Tournament logic, reservations, payments, and club verification workflow are still pending

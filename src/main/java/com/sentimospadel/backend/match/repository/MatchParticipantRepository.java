@@ -18,6 +18,9 @@ public interface MatchParticipantRepository extends JpaRepository<MatchParticipa
     @EntityGraph(attributePaths = {"match", "playerProfile", "playerProfile.user"})
     List<MatchParticipant> findAllByMatchIdInOrderByJoinedAtAsc(Collection<Long> matchIds);
 
+    @EntityGraph(attributePaths = {"match", "match.club", "playerProfile", "playerProfile.user"})
+    List<MatchParticipant> findAllByMatchClubIdInOrderByMatchScheduledAtDesc(Collection<Long> clubIds);
+
     boolean existsByMatchIdAndPlayerProfileId(Long matchId, Long playerProfileId);
 
     long countByMatchId(Long matchId);

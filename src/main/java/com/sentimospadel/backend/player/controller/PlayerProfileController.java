@@ -1,10 +1,16 @@
 package com.sentimospadel.backend.player.controller;
 
 import com.sentimospadel.backend.player.dto.PlayerProfileResponse;
+import com.sentimospadel.backend.player.dto.PlayerClubRankingSummaryResponse;
+import com.sentimospadel.backend.player.dto.PlayerPartnerInsightResponse;
+import com.sentimospadel.backend.player.dto.PlayerRivalInsightResponse;
 import com.sentimospadel.backend.player.service.PlayerProfileService;
+import com.sentimospadel.backend.player.service.PlayerInsightService;
 import com.sentimospadel.backend.match.dto.PlayerMatchHistoryEntryResponse;
 import com.sentimospadel.backend.match.enums.PlayerMatchHistoryScope;
 import com.sentimospadel.backend.match.service.PlayerMatchHistoryService;
+import com.sentimospadel.backend.notification.dto.PendingActionResponse;
+import com.sentimospadel.backend.notification.service.PlayerInboxService;
 import com.sentimospadel.backend.rating.dto.RatingHistoryEntryResponse;
 import com.sentimospadel.backend.rating.service.PlayerRatingHistoryService;
 import java.util.List;
@@ -22,8 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlayerProfileController {
 
     private final PlayerProfileService playerProfileService;
+    private final PlayerInsightService playerInsightService;
     private final PlayerRatingHistoryService playerRatingHistoryService;
     private final PlayerMatchHistoryService playerMatchHistoryService;
+    private final PlayerInboxService playerInboxService;
 
     @GetMapping("/me")
     public PlayerProfileResponse getMyPlayerProfile(Authentication authentication) {
@@ -44,6 +52,26 @@ public class PlayerProfileController {
                 authentication.getName(),
                 PlayerMatchHistoryScope.fromQuery(scope)
         );
+    }
+
+    @GetMapping("/me/pending-actions")
+    public List<PendingActionResponse> getMyPendingActions(Authentication authentication) {
+        return playerInboxService.getMyPendingActions(authentication.getName());
+    }
+
+    @GetMapping("/me/top-partners")
+    public List<PlayerPartnerInsightResponse> getMyTopPartners(Authentication authentication) {
+        return playerInsightService.getMyTopPartners(authentication.getName());
+    }
+
+    @GetMapping("/me/top-rivals")
+    public List<PlayerRivalInsightResponse> getMyTopRivals(Authentication authentication) {
+        return playerInsightService.getMyTopRivals(authentication.getName());
+    }
+
+    @GetMapping("/me/club-rankings")
+    public List<PlayerClubRankingSummaryResponse> getMyClubRankings(Authentication authentication) {
+        return playerInsightService.getMyClubRankings(authentication.getName());
     }
 
     @GetMapping("/{id}")

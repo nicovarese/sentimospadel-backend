@@ -39,7 +39,7 @@ public class ClubService {
 
     @Transactional(readOnly = true)
     public List<ClubResponse> getClubs() {
-        return clubRepository.findAll()
+        return clubRepository.findAllByOrderByIdAsc()
                 .stream()
                 .map(this::toResponse)
                 .toList();

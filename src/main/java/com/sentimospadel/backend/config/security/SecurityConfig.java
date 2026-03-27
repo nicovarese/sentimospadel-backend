@@ -62,7 +62,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me", "/api/players/me/**").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me", "/api/players/me/**", "/api/notifications", "/api/notifications/**", "/api/clubs/me/management/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
                         .requestMatchers(
                                 HttpMethod.POST,

@@ -16,9 +16,19 @@ import com.sentimospadel.backend.match.enums.MatchStatus;
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
 import com.sentimospadel.backend.match.enums.PlayerMatchHistoryScope;
 import com.sentimospadel.backend.match.service.PlayerMatchHistoryService;
+import com.sentimospadel.backend.notification.dto.PendingActionResponse;
+import com.sentimospadel.backend.notification.enums.NotificationStatus;
+import com.sentimospadel.backend.notification.enums.PendingActionType;
+import com.sentimospadel.backend.notification.service.PlayerInboxService;
 import com.sentimospadel.backend.player.dto.PlayerProfileResponse;
+import com.sentimospadel.backend.player.dto.ClubRankingBucketResponse;
+import com.sentimospadel.backend.player.dto.ClubRankingEntryResponse;
+import com.sentimospadel.backend.player.dto.PlayerClubRankingSummaryResponse;
+import com.sentimospadel.backend.player.dto.PlayerPartnerInsightResponse;
+import com.sentimospadel.backend.player.dto.PlayerRivalInsightResponse;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
+import com.sentimospadel.backend.player.service.PlayerInsightService;
 import com.sentimospadel.backend.player.service.PlayerProfileService;
 import com.sentimospadel.backend.rating.dto.RatingHistoryEntryResponse;
 import com.sentimospadel.backend.rating.dto.RatingHistoryMatchSummaryResponse;
@@ -49,19 +59,27 @@ class PlayerProfileControllerTest {
     private PlayerProfileService playerProfileService;
 
     @Mock
+    private PlayerInsightService playerInsightService;
+
+    @Mock
     private PlayerRatingHistoryService playerRatingHistoryService;
 
     @Mock
     private PlayerMatchHistoryService playerMatchHistoryService;
 
+    @Mock
+    private PlayerInboxService playerInboxService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new PlayerProfileController(
+                mockMvc = MockMvcBuilders.standaloneSetup(new PlayerProfileController(
                         playerProfileService,
+                        playerInsightService,
                         playerRatingHistoryService,
-                        playerMatchHistoryService
+                        playerMatchHistoryService,
+                        playerInboxService
                 ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addFilters(new MeAuthenticationRequiredFilter())
@@ -83,6 +101,30 @@ class PlayerProfileControllerTest {
     @Test
     void myMatchesRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/players/me/matches"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void myPendingActionsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me/pending-actions"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void myTopPartnersRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me/top-partners"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void myTopRivalsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me/top-rivals"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void myClubRankingsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me/club-rankings"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -229,6 +271,102 @@ class PlayerProfileControllerTest {
                 .andExpect(status().isOk());
 
         verify(playerMatchHistoryService).getMyMatches("player@example.com", PlayerMatchHistoryScope.UPCOMING);
+    }
+
+    @Test
+    void myPendingActionsReturnsBackendDrivenTasks() throws Exception {
+        when(playerInboxService.getMyPendingActions("player@example.com")).thenReturn(List.of(
+                new PendingActionResponse(
+                        50L,
+                        PendingActionType.SUBMIT_MATCH_RESULT,
+                        NotificationStatus.UNREAD,
+                        80L,
+                        null,
+                        null,
+                        "Carga el resultado del partido",
+                        "Tu partido ya terminó. Cargá el resultado.",
+                        Instant.parse("2026-03-25T21:00:00Z"),
+                        Instant.parse("2026-03-25T22:30:00Z")
+                )
+        ));
+
+        mockMvc.perform(get("/api/players/me/pending-actions")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].notificationId").value(50))
+                .andExpect(jsonPath("$[0].type").value("SUBMIT_MATCH_RESULT"))
+                .andExpect(jsonPath("$[0].notificationStatus").value("UNREAD"))
+                .andExpect(jsonPath("$[0].matchId").value(80));
+    }
+
+    @Test
+    void myTopPartnersReturnsBackendDrivenPartnerInsights() throws Exception {
+        when(playerInsightService.getMyTopPartners("player@example.com")).thenReturn(List.of(
+                new PlayerPartnerInsightResponse(
+                        12L,
+                        "Martin Gomez",
+                        null,
+                        4,
+                        new BigDecimal("0.18")
+                )
+        ));
+
+        mockMvc.perform(get("/api/players/me/top-partners")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].playerProfileId").value(12))
+                .andExpect(jsonPath("$[0].matchesWonTogether").value(4))
+                .andExpect(jsonPath("$[0].ratingGainedTogether").value(0.18));
+    }
+
+    @Test
+    void myTopRivalsReturnsBackendDrivenRivalInsights() throws Exception {
+        when(playerInsightService.getMyTopRivals("player@example.com")).thenReturn(List.of(
+                new PlayerRivalInsightResponse(
+                        13L,
+                        "Juan Perez",
+                        null,
+                        3,
+                        new BigDecimal("0.11")
+                )
+        ));
+
+        mockMvc.perform(get("/api/players/me/top-rivals")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].playerProfileId").value(13))
+                .andExpect(jsonPath("$[0].matchesLostAgainst").value(3))
+                .andExpect(jsonPath("$[0].ratingLostAgainst").value(0.11));
+    }
+
+    @Test
+    void myClubRankingsReturnsBackendDrivenClubSummaries() throws Exception {
+        ClubRankingEntryResponse userEntry = new ClubRankingEntryResponse(
+                10L,
+                "Player One",
+                null,
+                new BigDecimal("4.82"),
+                UruguayCategory.TERCERA,
+                6
+        );
+
+        when(playerInsightService.getMyClubRankings("player@example.com")).thenReturn(List.of(
+                new PlayerClubRankingSummaryResponse(
+                        1L,
+                        "Top Padel",
+                        6,
+                        new ClubRankingBucketResponse(5, userEntry, List.of(userEntry)),
+                        new ClubRankingBucketResponse(2, userEntry, List.of(userEntry))
+                )
+        ));
+
+        mockMvc.perform(get("/api/players/me/club-rankings")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].clubId").value(1))
+                .andExpect(jsonPath("$[0].clubName").value("Top Padel"))
+                .andExpect(jsonPath("$[0].competitive.userRank").value(5))
+                .andExpect(jsonPath("$[0].social.userEntry.matchesPlayedAtClub").value(6));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sentimospadel.backend.tournament.repository;
 
 import com.sentimospadel.backend.tournament.entity.TournamentMatchResult;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -23,4 +24,12 @@ public interface TournamentMatchResultRepository extends JpaRepository<Tournamen
             "rejectedBy"
     })
     List<TournamentMatchResult> findAllByTournamentMatchTournamentId(Long tournamentId);
+
+    @EntityGraph(attributePaths = {
+            "tournamentMatch",
+            "submittedBy",
+            "confirmedBy",
+            "rejectedBy"
+    })
+    List<TournamentMatchResult> findAllByTournamentMatchIdIn(Collection<Long> tournamentMatchIds);
 }

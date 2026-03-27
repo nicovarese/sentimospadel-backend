@@ -6,6 +6,7 @@ import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.ConflictException;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
+import com.sentimospadel.backend.shared.result.ResultEligibilityPolicy;
 import com.sentimospadel.backend.tournament.dto.RejectTournamentMatchResultRequest;
 import com.sentimospadel.backend.tournament.dto.SubmitTournamentMatchResultRequest;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResponse;
@@ -56,6 +57,7 @@ public class TournamentMatchService {
         TournamentMatch match = getMatchEntity(tournamentId, matchId);
         Tournament tournament = match.getTournament();
         PlayerProfile submitter = playerProfileResolverService.getOrCreateByUserEmail(email);
+        Instant now = Instant.now();
 
         if (tournament.getFormat() != TournamentFormat.LEAGUE) {
             throw new ConflictException("Tournament match results are currently operational only for LEAGUE tournaments");
@@ -66,6 +68,9 @@ public class TournamentMatchService {
         if (!isPlayerInMatch(match, submitter.getId())) {
             throw new AccessDeniedException("Only team members can submit tournament results");
         }
+        if (!ResultEligibilityPolicy.hasEnded(match.getScheduledAt(), now)) {
+            throw new ConflictException("Tournament results can only be submitted once the scheduled match has ended");
+        }
         if (match.getTeamOneEntry().getStatus() != TournamentEntryStatus.CONFIRMED
                 || match.getTeamTwoEntry().getStatus() != TournamentEntryStatus.CONFIRMED) {
             throw new ConflictException("Tournament matches require confirmed teams");
@@ -75,7 +80,7 @@ public class TournamentMatchService {
         TournamentMatchResult savedResult = tournamentMatchResultRepository.save(
                 tournamentMatchResultRepository.findByTournamentMatchId(matchId)
                         .map(existing -> prepareResubmittedResult(existing, submitter, request))
-                        .orElseGet(() -> buildNewResult(match, submitter, request))
+                        .orElseGet(() -> buildNewResult(match, submitter, request, now))
         );
 
         match.setStatus(TournamentMatchStatus.RESULT_PENDING);
@@ -144,7 +149,8 @@ public class TournamentMatchService {
     private TournamentMatchResult buildNewResult(
             TournamentMatch match,
             PlayerProfile submitter,
-            SubmitTournamentMatchResultRequest request
+            SubmitTournamentMatchResultRequest request,
+            Instant submittedAt
     ) {
         return TournamentMatchResult.builder()
                 .tournamentMatch(match)
@@ -157,7 +163,7 @@ public class TournamentMatchService {
                 .setTwoTeamTwoGames(setValue(request.sets(), 1, false))
                 .setThreeTeamOneGames(setValue(request.sets(), 2, true))
                 .setThreeTeamTwoGames(setValue(request.sets(), 2, false))
-                .submittedAt(Instant.now())
+                .submittedAt(submittedAt)
                 .build();
     }
 

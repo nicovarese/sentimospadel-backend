@@ -1,5 +1,6 @@
 package com.sentimospadel.backend.user.entity;
 
+import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.shared.persistence.BaseEntity;
 import com.sentimospadel.backend.user.enums.UserRole;
 import com.sentimospadel.backend.user.enums.UserStatus;
@@ -10,6 +11,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -45,4 +48,8 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     private UserStatus status;
+
+    @ManyToOne
+    @JoinColumn(name = "managed_club_id")
+    private Club managedClub;
 }

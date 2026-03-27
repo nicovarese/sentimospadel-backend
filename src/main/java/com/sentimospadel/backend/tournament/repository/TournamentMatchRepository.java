@@ -3,8 +3,10 @@ package com.sentimospadel.backend.tournament.repository;
 import com.sentimospadel.backend.tournament.entity.TournamentMatch;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 public interface TournamentMatchRepository extends JpaRepository<TournamentMatch, Long> {
 
@@ -37,6 +39,28 @@ public interface TournamentMatchRepository extends JpaRepository<TournamentMatch
             "teamTwoEntry.secondaryPlayerProfile.user"
     })
     Optional<TournamentMatch> findByIdAndTournamentId(Long matchId, Long tournamentId);
+
+    @Query("""
+            select distinct tm
+            from TournamentMatch tm
+            join fetch tm.tournament tournament
+            join fetch tm.teamOneEntry teamOneEntry
+            left join fetch teamOneEntry.primaryPlayerProfile
+            left join fetch teamOneEntry.primaryPlayerProfile.user
+            left join fetch teamOneEntry.secondaryPlayerProfile
+            left join fetch teamOneEntry.secondaryPlayerProfile.user
+            join fetch tm.teamTwoEntry teamTwoEntry
+            left join fetch teamTwoEntry.primaryPlayerProfile
+            left join fetch teamTwoEntry.primaryPlayerProfile.user
+            left join fetch teamTwoEntry.secondaryPlayerProfile
+            left join fetch teamTwoEntry.secondaryPlayerProfile.user
+            where teamOneEntry.primaryPlayerProfile.id = :playerProfileId
+               or teamOneEntry.secondaryPlayerProfile.id = :playerProfileId
+               or teamTwoEntry.primaryPlayerProfile.id = :playerProfileId
+               or teamTwoEntry.secondaryPlayerProfile.id = :playerProfileId
+            order by tm.scheduledAt desc, tm.id desc
+            """)
+    List<TournamentMatch> findAllByParticipantPlayerProfileIdOrderByScheduledAtDesc(@Param("playerProfileId") Long playerProfileId);
 
     boolean existsByTournamentId(Long tournamentId);
 

@@ -28,6 +28,7 @@ import com.sentimospadel.backend.rating.service.RatingApplicationService;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.ConflictException;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
+import com.sentimospadel.backend.shared.result.ResultEligibilityPolicy;
 import java.time.Instant;
 import java.util.Map;
 import java.util.List;
@@ -187,6 +188,7 @@ public class MatchService {
     public MatchResultResponse submitResult(String email, Long matchId, SubmitMatchResultRequest request) {
         Match match = getMatchEntity(matchId);
         PlayerProfile playerProfile = playerProfileResolverService.getOrCreateByUserEmail(email);
+        Instant now = Instant.now();
 
         if (match.getStatus() == MatchStatus.CANCELLED) {
             throw new ConflictException("Cancelled matches cannot receive results");
@@ -198,6 +200,10 @@ public class MatchService {
 
         if (!matchParticipantRepository.existsByMatchIdAndPlayerProfileId(matchId, playerProfile.getId())) {
             throw new ConflictException("Only match participants can submit results");
+        }
+
+        if (!ResultEligibilityPolicy.hasEnded(match.getScheduledAt(), now)) {
+            throw new ConflictException("Results can only be submitted once the scheduled match has ended");
         }
 
         long participantCount = matchParticipantRepository.countByMatchId(matchId);
@@ -219,7 +225,7 @@ public class MatchService {
                                 .winnerTeam(request.winnerTeam())
                                 .teamOneScore(request.score().teamOneScore())
                                 .teamTwoScore(request.score().teamTwoScore())
-                                .submittedAt(Instant.now())
+                                .submittedAt(now)
                                 .build())
         );
 
