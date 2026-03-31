@@ -9,6 +9,8 @@ public record RegisterResponse(
         String email,
         UserRole role,
         UserStatus status,
+        Long managedClubId,
+        String managedClubName,
         Instant createdAt,
         Instant updatedAt
 ) {

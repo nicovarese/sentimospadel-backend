@@ -12,6 +12,9 @@ import com.sentimospadel.backend.auth.dto.LoginRequest;
 import com.sentimospadel.backend.auth.dto.LoginResponse;
 import com.sentimospadel.backend.auth.dto.RegisterRequest;
 import com.sentimospadel.backend.auth.dto.RegisterResponse;
+import com.sentimospadel.backend.auth.enums.RegisterAccountType;
+import com.sentimospadel.backend.club.entity.Club;
+import com.sentimospadel.backend.club.repository.ClubRepository;
 import com.sentimospadel.backend.shared.exception.DuplicateResourceException;
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.enums.UserRole;
@@ -38,6 +41,9 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private ClubRepository clubRepository;
+
+    @Mock
     private AuthenticationManager authenticationManager;
 
     @Mock
@@ -47,12 +53,12 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, authenticationManager, jwtService);
+        authService = new AuthService(userRepository, clubRepository, passwordEncoder, authenticationManager, jwtService);
     }
 
     @Test
     void registerHashesPasswordAndPersistsUser() {
-        RegisterRequest request = new RegisterRequest(" Player@Example.com ", "secret123");
+        RegisterRequest request = new RegisterRequest(" Player@Example.com ", "secret123", RegisterAccountType.PLAYER, null, null, null);
 
         when(userRepository.existsByEmail("player@example.com")).thenReturn(false);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
@@ -77,7 +83,7 @@ class AuthServiceTest {
 
     @Test
     void registerRejectsDuplicateEmail() {
-        RegisterRequest request = new RegisterRequest("player@example.com", "secret123");
+        RegisterRequest request = new RegisterRequest("player@example.com", "secret123", RegisterAccountType.PLAYER, null, null, null);
 
         when(userRepository.existsByEmail("player@example.com")).thenReturn(true);
 
@@ -108,6 +114,39 @@ class AuthServiceTest {
         assertEquals("player@example.com", response.email());
         assertEquals(UserRole.PLAYER, response.role());
         assertEquals(UserStatus.ACTIVE, response.status());
+    }
+
+    @Test
+    void registerClubAccountCreatesManagedClubAdmin() {
+        RegisterRequest request = new RegisterRequest(
+                " club@example.com ",
+                "secret123",
+                RegisterAccountType.CLUB,
+                " Club de Prueba ",
+                " Montevideo ",
+                " Rivera 1234 "
+        );
+
+        when(userRepository.existsByEmail("club@example.com")).thenReturn(false);
+        when(clubRepository.save(any(Club.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setCreatedAt(Instant.parse("2026-03-30T12:00:00Z"));
+            user.setUpdatedAt(Instant.parse("2026-03-30T12:00:00Z"));
+            return user;
+        });
+
+        RegisterResponse response = authService.register(request);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        User savedUser = userCaptor.getValue();
+
+        assertEquals("club@example.com", savedUser.getEmail());
+        assertEquals(UserRole.ADMIN, savedUser.getRole());
+        assertEquals("Club de Prueba", savedUser.getManagedClub().getName());
+        assertEquals("Montevideo", savedUser.getManagedClub().getCity());
+        assertEquals("Club de Prueba", response.managedClubName());
     }
 
     @Test

@@ -174,6 +174,7 @@ class TournamentControllerTest {
                 null,
                 null,
                 2,
+                null,
                 TournamentStandingsTiebreak.GAMES_DIFFERENCE,
                 List.of(),
                 null,
@@ -182,6 +183,7 @@ class TournamentControllerTest {
                 List.of(new TournamentEntryResponse(
                         100L,
                         "Dupla Uno",
+                        null,
                         TournamentEntryStatus.CONFIRMED,
                         List.of(),
                         List.of(

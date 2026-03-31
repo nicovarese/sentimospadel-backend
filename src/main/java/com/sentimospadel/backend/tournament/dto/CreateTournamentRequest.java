@@ -24,6 +24,7 @@ public record CreateTournamentRequest(
         Boolean openEnrollment,
         Boolean competitive,
         Integer leagueRounds,
+        @Positive Integer matchesPerParticipant,
         TournamentStandingsTiebreak standingsTiebreak,
         Integer availableCourts,
         @Size(max = 20) List<String> courtNames,

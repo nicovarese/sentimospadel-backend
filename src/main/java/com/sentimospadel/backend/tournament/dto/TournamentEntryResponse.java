@@ -7,6 +7,7 @@ import java.util.List;
 public record TournamentEntryResponse(
         Long id,
         String teamName,
+        String groupLabel,
         TournamentEntryStatus status,
         List<String> timePreferences,
         List<TournamentEntryMemberResponse> members,

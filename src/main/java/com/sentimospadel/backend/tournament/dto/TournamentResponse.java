@@ -28,6 +28,7 @@ public record TournamentResponse(
         Integer availableCourts,
         Integer numberOfGroups,
         Integer leagueRounds,
+        Integer matchesPerParticipant,
         TournamentStandingsTiebreak standingsTiebreak,
         List<String> courtNames,
         Instant launchedAt,

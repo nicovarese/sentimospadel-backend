@@ -1,6 +1,7 @@
 package com.sentimospadel.backend.tournament.entity;
 
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.tournament.enums.TournamentEntryKind;
 import com.sentimospadel.backend.tournament.enums.TournamentEntryStatus;
 import com.sentimospadel.backend.tournament.support.StringListJsonConverter;
 import jakarta.persistence.Convert;
@@ -56,6 +57,13 @@ public class TournamentEntry {
     @Column(name = "team_name", length = 160)
     private String teamName;
 
+    @Column(name = "group_label", length = 30)
+    private String groupLabel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entry_kind", nullable = false, length = 30)
+    private TournamentEntryKind entryKind;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "entry_status", nullable = false, length = 20)
     private TournamentEntryStatus status;
@@ -69,6 +77,9 @@ public class TournamentEntry {
 
     @PrePersist
     protected void onCreate() {
+        if (entryKind == null) {
+            entryKind = TournamentEntryKind.REGISTERED;
+        }
         if (createdAt == null) {
             createdAt = Instant.now();
         }

@@ -1,5 +1,98 @@
 # Progress Log
 
+## 2026-03-31
+
+### Summary
+- Identified `AMERICANO` as the biggest remaining visible tournament slice still relying on frontend-local truth after `LEAGUE` and `ELIMINATION`
+- Added a focused alignment note for this slice in `/docs/frontend-backend-tournament-americano-fixed-alignment.md`
+- Implemented the first backend-driven `AMERICANO fijo` slice while intentionally leaving `AMERICANO dinámico` for the next pass
+- Extended tournament persistence with `matches_per_participant` so the backend can own official fixed-americano launch and scheduling constraints
+- Extended tournament launch so `AMERICANO` with `americanoType = FIXED` now generates official backend tournament matches instead of relying on local frontend generation
+- Extended tournament standings so fixed americano now exposes an official flat table ordered by backend-owned points and games tiebreaks
+- Extended tournament match result flow so fixed americano now supports submit / confirm / reject like the other operational tournament modes
+- Extended pending actions so fixed-americano matches now appear in the backend-driven result tray once they become eligible by time
+- Rewired the current frontend tournament data path so backend operational tournaments now include `AMERICANO fijo` in the existing competition/status flow without redesigning the UI
+- Kept `AMERICANO dinámico` intentionally pending in this slice because its player-rotation rules are still more specialized than the fixed-team path
+
+### Current AMERICANO Status
+- `AMERICANO fijo` is now backend-driven for:
+  - create
+  - launch
+  - generated matches
+  - standings
+  - submit / confirm / reject
+  - pending actions
+- `AMERICANO dinámico` still remains local/prototype and is the next tournament slice to implement
+
+### Likely Next Steps
+- Implement `AMERICANO dinámico` using backend-owned player rotation, generated matches, and individual standings
+- Add QA seeds for fixed americano if manual testing needs a preloaded path similar to `LEAGUE` and `ELIMINATION`
+- Continue cleaning the smaller premium/demo extras that still remain visible after the tournament modes are fully backend-driven
+
+### Update Later In The Day
+- Closed the pending `AMERICANO dinamico` slice instead of leaving it prototype-only
+- Added `/docs/frontend-backend-tournament-americano-dynamic-alignment.md` to document the chosen model extension
+- Added `entry_kind` to tournament entries so backend can keep:
+  - official registered roster entries
+  - generated per-match pair entries for dynamic americano
+- Backend now owns dynamic americano:
+  - launch
+  - generated rotating pairings
+  - generated matches
+  - individual standings
+  - submit / confirm / reject
+  - pending actions
+- Frontend now consumes backend dynamic-americano data in the existing tournament flow without redesigning the UI
+- Added focused service tests for:
+  - dynamic americano launch
+  - dynamic americano result submit
+
+## 2026-03-30
+
+### Summary
+- Split auth/session flows between separate `PLAYER` and `CLUB` accounts instead of mixing both worlds in one frontend shell
+- Extended backend auth registration so club accounts are real first-class users:
+  - `POST /api/auth/register` now accepts `accountType`
+  - `CLUB` registration creates a real `clubs` row plus an `ADMIN` user linked through `users.managed_club_id`
+- Extended auth responses (`register`, `login`, `/api/auth/me`) to expose `managedClubId` and `managedClubName`
+- Rewired frontend login/registration so the user explicitly chooses `Persona` or `Club`
+- Rewired frontend session bootstrap so backend role decides the shell:
+  - `PLAYER` -> player app
+  - `ADMIN` -> club app
+- Removed `Club View` from the official player shell and removed player tabs from the official club shell while preserving the current visual identity
+- Added a minimal logout affordance inside the backend-driven club dashboard, because club sessions no longer navigate through the player profile area
+- Implemented the first backend-driven `ELIMINATION` tournament slice on top of the existing tournament foundations
+- Extended tournament launch so `ELIMINATION` now generates official group-stage matches, persists group assignment in `tournament_entries.group_label`, and moves the tournament to `IN_PROGRESS`
+- Extended tournament standings so elimination tournaments now expose grouped standings through `GET /api/tournaments/{id}/standings`
+- Extended tournament result flow so confirmed elimination results can automatically generate semifinals/final when the corresponding stage is complete
+- Rewired the existing frontend elimination create/launch/status flow to backend contracts while preserving the current tournament UI
+- Kept `AMERICANO` intentionally pending; backend still rejects it as operational in this slice
+- Added dedicated QA seeds for `ELIMINATION` so manual testing no longer depends on hand-creating knockout tournaments from the UI:
+  - `Eliminatoria QA Abierta`
+  - `Eliminatoria QA En Curso`
+
+### Current Session Split Status
+- Player accounts now stay inside the player experience only:
+  - home
+  - reservas
+  - competir
+  - competición
+  - perfil
+- Club accounts now stay inside the club-admin experience only:
+  - `Club View`
+  - club users
+  - club agenda
+- The backend remains the source of truth for deciding which shell is allowed
+- Frontend mode selection is now only the intended access context; a mismatched account type is rejected after login instead of being silently accepted
+
+### Likely Next Steps
+- Decide if the player shell also needs a first-class visible logout action
+- Decide whether new club accounts should configure courts during signup or in a second-step club setup flow
+- Continue the mock-removal plan in the remaining visible areas:
+  - `AMERICANO`
+  - premium/demo profile extras
+  - any leftover local tournament/club data paths
+
 ## 2026-03-26
 
 ### Summary

@@ -23,8 +23,11 @@ import com.sentimospadel.backend.tournament.dto.TournamentResponse;
 import com.sentimospadel.backend.tournament.entity.Tournament;
 import com.sentimospadel.backend.tournament.entity.TournamentEntry;
 import com.sentimospadel.backend.tournament.entity.TournamentMatch;
+import com.sentimospadel.backend.tournament.enums.TournamentAmericanoType;
+import com.sentimospadel.backend.tournament.enums.TournamentEntryKind;
 import com.sentimospadel.backend.tournament.enums.TournamentEntryStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentFormat;
+import com.sentimospadel.backend.tournament.enums.TournamentMatchPhase;
 import com.sentimospadel.backend.tournament.enums.TournamentStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentStandingsTiebreak;
 import com.sentimospadel.backend.tournament.repository.TournamentEntryRepository;
@@ -99,6 +102,7 @@ class TournamentServiceTest {
                             tournament.getAvailableCourts(),
                             tournament.getNumberOfGroups(),
                             tournament.getLeagueRounds(),
+                            tournament.getMatchesPerParticipant(),
                             tournament.getStandingsTiebreak(),
                             tournament.getCourtNames() == null ? List.of() : tournament.getCourtNames(),
                             tournament.getLaunchedAt(),
@@ -128,6 +132,7 @@ class TournamentServiceTest {
                 true,
                 true,
                 2,
+                null,
                 TournamentStandingsTiebreak.GAMES_DIFFERENCE,
                 null,
                 List.of(),
@@ -154,6 +159,7 @@ class TournamentServiceTest {
                     .openEnrollment(tournament.isOpenEnrollment())
                     .competitive(tournament.isCompetitive())
                     .leagueRounds(tournament.getLeagueRounds())
+                    .matchesPerParticipant(tournament.getMatchesPerParticipant())
                     .pointsForWin(tournament.getPointsForWin())
                     .pointsForTiebreakLoss(tournament.getPointsForTiebreakLoss())
                     .pointsForLoss(tournament.getPointsForLoss())
@@ -164,7 +170,7 @@ class TournamentServiceTest {
             saved.setUpdatedAt(Instant.parse("2026-03-24T12:00:00Z"));
             return saved;
         });
-        when(tournamentEntryRepository.findAllByTournamentIdOrderByCreatedAtAsc(100L)).thenReturn(List.of());
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(100L, TournamentEntryKind.REGISTERED)).thenReturn(List.of());
         when(tournamentMatchRepository.countByTournamentId(100L)).thenReturn(0L);
 
         TournamentResponse response = tournamentService.createTournament("creator@example.com", request);
@@ -186,6 +192,7 @@ class TournamentServiceTest {
                 .tournament(tournament)
                 .primaryPlayerProfile(joiner)
                 .createdBy(joiner)
+                .entryKind(TournamentEntryKind.REGISTERED)
                 .status(TournamentEntryStatus.PENDING)
                 .createdAt(Instant.parse("2026-03-24T13:00:00Z"))
                 .timePreferences(List.of())
@@ -193,7 +200,7 @@ class TournamentServiceTest {
 
         when(playerProfileResolverService.getOrCreateByUserEmail("joiner@example.com")).thenReturn(joiner);
         when(tournamentRepository.findById(200L)).thenReturn(Optional.of(tournament));
-        when(tournamentEntryRepository.findAllByTournamentIdOrderByCreatedAtAsc(200L))
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(200L, TournamentEntryKind.REGISTERED))
                 .thenReturn(List.of(), List.of(savedEntry));
         when(tournamentEntryRepository.save(any(TournamentEntry.class))).thenReturn(savedEntry);
         when(tournamentMatchRepository.countByTournamentId(200L)).thenReturn(0L);
@@ -215,6 +222,7 @@ class TournamentServiceTest {
                 .tournament(tournament)
                 .primaryPlayerProfile(joiner)
                 .createdBy(joiner)
+                .entryKind(TournamentEntryKind.REGISTERED)
                 .status(TournamentEntryStatus.PENDING)
                 .createdAt(Instant.parse("2026-03-24T13:00:00Z"))
                 .timePreferences(List.of())
@@ -222,7 +230,7 @@ class TournamentServiceTest {
 
         when(playerProfileResolverService.getOrCreateByUserEmail("joiner@example.com")).thenReturn(joiner);
         when(tournamentRepository.findById(201L)).thenReturn(Optional.of(tournament));
-        when(tournamentEntryRepository.findAllByTournamentIdOrderByCreatedAtAsc(201L)).thenReturn(List.of(existingEntry));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(201L, TournamentEntryKind.REGISTERED)).thenReturn(List.of(existingEntry));
 
         assertThrows(ConflictException.class, () -> tournamentService.joinTournament("joiner@example.com", 201L));
     }
@@ -237,6 +245,7 @@ class TournamentServiceTest {
                 .tournament(tournament)
                 .primaryPlayerProfile(player)
                 .createdBy(player)
+                .entryKind(TournamentEntryKind.REGISTERED)
                 .status(TournamentEntryStatus.PENDING)
                 .createdAt(Instant.parse("2026-03-24T13:00:00Z"))
                 .timePreferences(List.of())
@@ -244,7 +253,7 @@ class TournamentServiceTest {
 
         when(playerProfileResolverService.getOrCreateByUserEmail("joiner@example.com")).thenReturn(player);
         when(tournamentRepository.findById(203L)).thenReturn(Optional.of(tournament));
-        when(tournamentEntryRepository.findAllByTournamentIdOrderByCreatedAtAsc(203L))
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(203L, TournamentEntryKind.REGISTERED))
                 .thenReturn(List.of(entry), List.of());
         when(tournamentMatchRepository.countByTournamentId(203L)).thenReturn(0L);
 
@@ -269,7 +278,7 @@ class TournamentServiceTest {
 
         when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
         when(tournamentRepository.findById(204L)).thenReturn(Optional.of(tournament));
-        when(tournamentEntryRepository.findAllByTournamentIdOrderByCreatedAtAsc(204L)).thenReturn(entries);
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(204L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
         when(tournamentMatchRepository.existsByTournamentId(204L)).thenReturn(false);
         when(tournamentMatchRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         when(tournamentMatchRepository.countByTournamentId(204L)).thenReturn(12L);
@@ -288,10 +297,142 @@ class TournamentServiceTest {
         assertEquals(12, matchesCaptor.getValue().size());
     }
 
+    @Test
+    void launchTournamentGeneratesEliminationGroupStageMatchesAndAssignsGroups() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        Tournament tournament = tournament(205L, creator, TournamentStatus.OPEN, TournamentFormat.ELIMINATION, 4);
+        tournament.setEndDate(LocalDate.of(2026, 4, 20));
+
+        List<TournamentEntry> entries = List.of(
+                confirmedEntry(501L, tournament, playerProfile(30L, "a1@example.com", "A1"), playerProfile(31L, "a2@example.com", "A2"), "Team A"),
+                confirmedEntry(502L, tournament, playerProfile(32L, "b1@example.com", "B1"), playerProfile(33L, "b2@example.com", "B2"), "Team B"),
+                confirmedEntry(503L, tournament, playerProfile(34L, "c1@example.com", "C1"), playerProfile(35L, "c2@example.com", "C2"), "Team C"),
+                confirmedEntry(504L, tournament, playerProfile(36L, "d1@example.com", "D1"), playerProfile(37L, "d2@example.com", "D2"), "Team D")
+        );
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
+        when(tournamentRepository.findById(205L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(205L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
+        when(tournamentEntryRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.existsByTournamentId(205L)).thenReturn(false);
+        when(tournamentMatchRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.countByTournamentId(205L)).thenReturn(2L);
+
+        TournamentResponse response = tournamentService.launchTournament(
+                "creator@example.com",
+                205L,
+                new LaunchTournamentRequest(2, 2, null, List.of("Cancha 1", "Cancha 2"))
+        );
+
+        assertEquals(TournamentStatus.IN_PROGRESS, response.status());
+        assertEquals(2, response.generatedMatchesCount());
+
+        ArgumentCaptor<List<TournamentEntry>> entriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(tournamentEntryRepository).saveAll(entriesCaptor.capture());
+        assertEquals(List.of("Grupo A", "Grupo B", "Grupo A", "Grupo B"),
+                entriesCaptor.getValue().stream().map(TournamentEntry::getGroupLabel).toList());
+
+        ArgumentCaptor<List<TournamentMatch>> matchesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(tournamentMatchRepository).saveAll(matchesCaptor.capture());
+        assertEquals(2, matchesCaptor.getValue().size());
+        assertEquals(TournamentMatchPhase.GROUP_STAGE, matchesCaptor.getValue().getFirst().getPhase());
+    }
+
+    @Test
+    void launchTournamentGeneratesAmericanoFixedMatches() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        Tournament tournament = tournament(206L, creator, TournamentStatus.OPEN, TournamentFormat.AMERICANO, 4);
+        tournament.setAmericanoType(TournamentAmericanoType.FIXED);
+        tournament.setMatchesPerParticipant(2);
+        tournament.setEndDate(LocalDate.of(2026, 4, 20));
+
+        List<TournamentEntry> entries = List.of(
+                confirmedEntry(601L, tournament, playerProfile(40L, "a1@example.com", "A1"), playerProfile(41L, "a2@example.com", "A2"), "Team A"),
+                confirmedEntry(602L, tournament, playerProfile(42L, "b1@example.com", "B1"), playerProfile(43L, "b2@example.com", "B2"), "Team B"),
+                confirmedEntry(603L, tournament, playerProfile(44L, "c1@example.com", "C1"), playerProfile(45L, "c2@example.com", "C2"), "Team C"),
+                confirmedEntry(604L, tournament, playerProfile(46L, "d1@example.com", "D1"), playerProfile(47L, "d2@example.com", "D2"), "Team D")
+        );
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
+        when(tournamentRepository.findById(206L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(206L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
+        when(tournamentMatchRepository.existsByTournamentId(206L)).thenReturn(false);
+        when(tournamentMatchRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.countByTournamentId(206L)).thenReturn(4L);
+
+        TournamentResponse response = tournamentService.launchTournament(
+                "creator@example.com",
+                206L,
+                new LaunchTournamentRequest(2, 1, null, List.of("Cancha 1", "Cancha 2"))
+        );
+
+        assertEquals(TournamentStatus.IN_PROGRESS, response.status());
+        assertEquals(4, response.generatedMatchesCount());
+
+        ArgumentCaptor<List<TournamentMatch>> matchesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(tournamentMatchRepository).saveAll(matchesCaptor.capture());
+        assertEquals(4, matchesCaptor.getValue().size());
+        assertEquals(TournamentMatchPhase.AMERICANO_STAGE, matchesCaptor.getValue().getFirst().getPhase());
+        assertEquals("Ronda 1", matchesCaptor.getValue().getFirst().getRoundLabel());
+    }
+
+    @Test
+    void launchTournamentGeneratesAmericanoDynamicMatchesAndGeneratedPairs() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        Tournament tournament = tournament(207L, creator, TournamentStatus.OPEN, TournamentFormat.AMERICANO, 4);
+        tournament.setAmericanoType(TournamentAmericanoType.DYNAMIC);
+        tournament.setMatchesPerParticipant(2);
+        tournament.setEndDate(LocalDate.of(2026, 4, 20));
+
+        List<TournamentEntry> entries = List.of(
+                confirmedSinglePlayerEntry(701L, tournament, playerProfile(50L, "a@example.com", "Jugador A")),
+                confirmedSinglePlayerEntry(702L, tournament, playerProfile(51L, "b@example.com", "Jugador B")),
+                confirmedSinglePlayerEntry(703L, tournament, playerProfile(52L, "c@example.com", "Jugador C")),
+                confirmedSinglePlayerEntry(704L, tournament, playerProfile(53L, "d@example.com", "Jugador D"))
+        );
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
+        when(tournamentRepository.findById(207L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(207L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
+        when(tournamentEntryRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.existsByTournamentId(207L)).thenReturn(false);
+        when(tournamentMatchRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.countByTournamentId(207L)).thenReturn(2L);
+
+        TournamentResponse response = tournamentService.launchTournament(
+                "creator@example.com",
+                207L,
+                new LaunchTournamentRequest(2, 1, null, List.of("Cancha 1", "Cancha 2"))
+        );
+
+        assertEquals(TournamentStatus.IN_PROGRESS, response.status());
+        assertEquals(2, response.generatedMatchesCount());
+
+        ArgumentCaptor<List<TournamentEntry>> generatedEntriesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(tournamentEntryRepository).saveAll(generatedEntriesCaptor.capture());
+        assertEquals(4, generatedEntriesCaptor.getValue().size());
+        assertEquals(
+                List.of(
+                        TournamentEntryKind.GENERATED_MATCH_PAIR,
+                        TournamentEntryKind.GENERATED_MATCH_PAIR,
+                        TournamentEntryKind.GENERATED_MATCH_PAIR,
+                        TournamentEntryKind.GENERATED_MATCH_PAIR
+                ),
+                generatedEntriesCaptor.getValue().stream().map(TournamentEntry::getEntryKind).toList()
+        );
+
+        ArgumentCaptor<List<TournamentMatch>> matchesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(tournamentMatchRepository).saveAll(matchesCaptor.capture());
+        assertEquals(2, matchesCaptor.getValue().size());
+        assertEquals(TournamentMatchPhase.AMERICANO_STAGE, matchesCaptor.getValue().getFirst().getPhase());
+        assertEquals(List.of("Ronda 1", "Ronda 2"), matchesCaptor.getValue().stream().map(TournamentMatch::getRoundLabel).toList());
+    }
+
     private TournamentEntryResponse toEntryResponse(TournamentEntry entry) {
         return new TournamentEntryResponse(
                 entry.getId(),
                 entry.getTeamName(),
+                entry.getGroupLabel(),
                 entry.getStatus(),
                 entry.getTimePreferences(),
                 List.of(
@@ -317,6 +458,20 @@ class TournamentServiceTest {
                 .secondaryPlayerProfile(p2)
                 .createdBy(p1)
                 .teamName(teamName)
+                .entryKind(TournamentEntryKind.REGISTERED)
+                .status(TournamentEntryStatus.CONFIRMED)
+                .timePreferences(List.of())
+                .createdAt(Instant.parse("2026-03-24T12:10:00Z"))
+                .build();
+    }
+
+    private TournamentEntry confirmedSinglePlayerEntry(Long id, Tournament tournament, PlayerProfile player) {
+        return TournamentEntry.builder()
+                .id(id)
+                .tournament(tournament)
+                .primaryPlayerProfile(player)
+                .createdBy(player)
+                .entryKind(TournamentEntryKind.REGISTERED)
                 .status(TournamentEntryStatus.CONFIRMED)
                 .timePreferences(List.of())
                 .createdAt(Instant.parse("2026-03-24T12:10:00Z"))
@@ -335,6 +490,7 @@ class TournamentServiceTest {
                 .openEnrollment(true)
                 .competitive(true)
                 .leagueRounds(2)
+                .matchesPerParticipant(null)
                 .pointsForWin(3)
                 .pointsForTiebreakLoss(1)
                 .pointsForLoss(0)

@@ -52,6 +52,7 @@ public class TournamentMapper {
                 tournament.getAvailableCourts(),
                 tournament.getNumberOfGroups(),
                 tournament.getLeagueRounds(),
+                tournament.getMatchesPerParticipant(),
                 tournament.getStandingsTiebreak(),
                 tournament.getCourtNames() == null ? List.of() : List.copyOf(tournament.getCourtNames()),
                 tournament.getLaunchedAt(),
@@ -67,6 +68,7 @@ public class TournamentMapper {
         return new TournamentEntryResponse(
                 entry.getId(),
                 displayTeamName(entry),
+                entry.getGroupLabel(),
                 entry.getStatus(),
                 entry.getTimePreferences() == null ? List.of() : List.copyOf(entry.getTimePreferences()),
                 toMemberResponses(entry),

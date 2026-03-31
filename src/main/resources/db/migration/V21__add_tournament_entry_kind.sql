@@ -1,0 +1,2 @@
+ALTER TABLE tournament_entries
+    ADD COLUMN entry_kind VARCHAR(30) NOT NULL DEFAULT 'REGISTERED';

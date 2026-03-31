@@ -99,6 +99,9 @@ public class Tournament extends BaseEntity {
     @Column(name = "league_rounds")
     private Integer leagueRounds;
 
+    @Column(name = "matches_per_participant")
+    private Integer matchesPerParticipant;
+
     @Column(name = "points_for_win", nullable = false)
     private Integer pointsForWin;
 

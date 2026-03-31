@@ -9,6 +9,8 @@ public record LoginResponse(
         Long id,
         String email,
         UserRole role,
-        UserStatus status
+        UserStatus status,
+        Long managedClubId,
+        String managedClubName
 ) {
 }

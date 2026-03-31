@@ -220,7 +220,6 @@ public class PendingActionService {
             Long playerProfileId
     ) {
         return match.getStatus() == TournamentMatchStatus.SCHEDULED
-                && match.getTournament().getFormat() == TournamentFormat.LEAGUE
                 && (match.getTournament().getStatus() == TournamentStatus.IN_PROGRESS
                         || match.getTournament().getStatus() == TournamentStatus.COMPLETED)
                 && ResultEligibilityPolicy.hasEnded(match.getScheduledAt(), now)

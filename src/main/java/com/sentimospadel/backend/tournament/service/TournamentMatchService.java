@@ -12,18 +12,26 @@ import com.sentimospadel.backend.tournament.dto.SubmitTournamentMatchResultReque
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResultResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchScoreSetRequest;
+import com.sentimospadel.backend.tournament.dto.TournamentStandingsEntryResponse;
+import com.sentimospadel.backend.tournament.dto.TournamentStandingsGroupResponse;
 import com.sentimospadel.backend.tournament.entity.Tournament;
 import com.sentimospadel.backend.tournament.entity.TournamentEntry;
 import com.sentimospadel.backend.tournament.entity.TournamentMatch;
 import com.sentimospadel.backend.tournament.entity.TournamentMatchResult;
 import com.sentimospadel.backend.tournament.enums.TournamentEntryStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentFormat;
+import com.sentimospadel.backend.tournament.enums.TournamentMatchPhase;
 import com.sentimospadel.backend.tournament.enums.TournamentMatchResultStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentMatchStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentStatus;
 import com.sentimospadel.backend.tournament.repository.TournamentMatchRepository;
 import com.sentimospadel.backend.tournament.repository.TournamentMatchResultRepository;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -39,6 +47,7 @@ public class TournamentMatchService {
     private final TournamentMatchResultRepository tournamentMatchResultRepository;
     private final PlayerProfileResolverService playerProfileResolverService;
     private final TournamentMapper tournamentMapper;
+    private final TournamentStandingsService tournamentStandingsService;
 
     @Transactional(readOnly = true)
     public List<TournamentMatchResponse> getTournamentMatches(Long tournamentId) {
@@ -59,9 +68,6 @@ public class TournamentMatchService {
         PlayerProfile submitter = playerProfileResolverService.getOrCreateByUserEmail(email);
         Instant now = Instant.now();
 
-        if (tournament.getFormat() != TournamentFormat.LEAGUE) {
-            throw new ConflictException("Tournament match results are currently operational only for LEAGUE tournaments");
-        }
         if (tournament.getStatus() != TournamentStatus.IN_PROGRESS && tournament.getStatus() != TournamentStatus.COMPLETED) {
             throw new ConflictException("Results can only be submitted after tournament launch");
         }
@@ -110,6 +116,10 @@ public class TournamentMatchService {
 
         match.setStatus(TournamentMatchStatus.COMPLETED);
         tournamentMatchRepository.save(match);
+
+        if (match.getTournament().getFormat() == TournamentFormat.ELIMINATION) {
+            advanceEliminationBracketIfNeeded(match.getTournament());
+        }
         updateTournamentCompletionIfNeeded(match.getTournament());
 
         return tournamentMapper.toMatchResultResponse(savedResult);
@@ -144,6 +154,271 @@ public class TournamentMatchService {
         match.setStatus(TournamentMatchStatus.SCHEDULED);
         tournamentMatchRepository.save(match);
         return tournamentMapper.toMatchResultResponse(savedResult);
+    }
+
+    private void advanceEliminationBracketIfNeeded(Tournament tournament) {
+        List<TournamentMatch> matches = tournamentMatchRepository.findAllByTournamentIdOrderByRoundNumberAscIdAsc(tournament.getId());
+
+        List<TournamentMatch> quarterfinals = matches.stream()
+                .filter(match -> match.getPhase() == TournamentMatchPhase.QUARTERFINAL)
+                .toList();
+        List<TournamentMatch> semifinals = matches.stream()
+                .filter(match -> match.getPhase() == TournamentMatchPhase.SEMIFINAL)
+                .toList();
+        List<TournamentMatch> finals = matches.stream()
+                .filter(match -> match.getPhase() == TournamentMatchPhase.FINAL)
+                .toList();
+        List<TournamentMatch> groupMatches = matches.stream()
+                .filter(match -> match.getPhase() == TournamentMatchPhase.GROUP_STAGE)
+                .toList();
+
+        if (!groupMatches.isEmpty()
+                && allCompleted(groupMatches)
+                && quarterfinals.isEmpty()
+                && semifinals.isEmpty()
+                && finals.isEmpty()) {
+            tournamentMatchRepository.saveAll(generateInitialEliminationPlayoffs(tournament, matches));
+            return;
+        }
+
+        if (!quarterfinals.isEmpty() && allCompleted(quarterfinals) && semifinals.isEmpty()) {
+            tournamentMatchRepository.saveAll(generateSemifinalsFromCompletedPhase(tournament, quarterfinals, matches));
+            return;
+        }
+
+        if (!semifinals.isEmpty() && allCompleted(semifinals) && finals.isEmpty()) {
+            tournamentMatchRepository.save(buildFinalFromCompletedPhase(tournament, semifinals, matches));
+        }
+    }
+
+    private List<TournamentMatch> generateInitialEliminationPlayoffs(Tournament tournament, List<TournamentMatch> existingMatches) {
+        List<TournamentStandingsGroupResponse> groups = tournamentStandingsService.buildEliminationGroups(tournament);
+        if (groups.isEmpty()) {
+            return List.of();
+        }
+
+        if (groups.size() == 1) {
+            List<TournamentEntry> qualified = topEntries(tournament, groups.getFirst().standings(), 4);
+            if (qualified.size() >= 4) {
+                return buildQuarterOrSemifinalRound(
+                        tournament,
+                        TournamentMatchPhase.SEMIFINAL,
+                        List.of(
+                                qualified.get(0), qualified.get(3),
+                                qualified.get(1), qualified.get(2)
+                        ),
+                        existingMatches
+                );
+            }
+            if (qualified.size() == 2) {
+                return List.of(buildSingleKnockoutMatch(tournament, TournamentMatchPhase.FINAL, 1, "Final", qualified.get(0), qualified.get(1), existingMatches, 0));
+            }
+            throw new ConflictException("ELIMINATION tournaments need at least two qualified teams to build playoffs");
+        }
+
+        if (groups.size() == 2) {
+            List<TournamentEntry> groupA = topEntries(tournament, groups.get(0).standings(), 2);
+            List<TournamentEntry> groupB = topEntries(tournament, groups.get(1).standings(), 2);
+            if (groupA.size() >= 2 && groupB.size() >= 2) {
+                return buildQuarterOrSemifinalRound(
+                        tournament,
+                        TournamentMatchPhase.SEMIFINAL,
+                        List.of(
+                                groupA.get(0), groupB.get(1),
+                                groupB.get(0), groupA.get(1)
+                        ),
+                        existingMatches
+                );
+            }
+            if (!groupA.isEmpty() && !groupB.isEmpty()) {
+                return List.of(buildSingleKnockoutMatch(tournament, TournamentMatchPhase.FINAL, 1, "Final", groupA.get(0), groupB.get(0), existingMatches, 0));
+            }
+            throw new ConflictException("Both groups need qualified teams before playoff generation");
+        }
+
+        List<TournamentEntry> winners = groups.stream()
+                .map(TournamentStandingsGroupResponse::standings)
+                .filter(groupStandings -> !groupStandings.isEmpty())
+                .map(groupStandings -> groupStandings.getFirst())
+                .sorted(Comparator.comparingInt(TournamentStandingsEntryResponse::points).reversed()
+                        .thenComparingInt(TournamentStandingsEntryResponse::gamesDifference).reversed()
+                        .thenComparingInt(TournamentStandingsEntryResponse::gamesWon).reversed())
+                .map(entry -> resolveEntry(tournament, entry.tournamentEntryId()))
+                .toList();
+
+        if (winners.size() == 2) {
+            return List.of(buildSingleKnockoutMatch(tournament, TournamentMatchPhase.FINAL, 1, "Final", winners.get(0), winners.get(1), existingMatches, 0));
+        }
+        if (winners.size() == 4) {
+            return buildQuarterOrSemifinalRound(
+                    tournament,
+                    TournamentMatchPhase.SEMIFINAL,
+                    List.of(
+                            winners.get(0), winners.get(3),
+                            winners.get(1), winners.get(2)
+                    ),
+                    existingMatches
+            );
+        }
+        if (winners.size() == 8) {
+            return buildQuarterOrSemifinalRound(
+                    tournament,
+                    TournamentMatchPhase.QUARTERFINAL,
+                    List.of(
+                            winners.get(0), winners.get(7),
+                            winners.get(3), winners.get(4),
+                            winners.get(1), winners.get(6),
+                            winners.get(2), winners.get(5)
+                    ),
+                    existingMatches
+            );
+        }
+
+        throw new ConflictException("ELIMINATION playoff generation currently supports 2, 4 or 8 qualified teams");
+    }
+
+    private List<TournamentMatch> generateSemifinalsFromCompletedPhase(
+            Tournament tournament,
+            List<TournamentMatch> completedQuarterfinals,
+            List<TournamentMatch> existingMatches
+    ) {
+        List<TournamentEntry> winners = completedQuarterfinals.stream()
+                .sorted(Comparator.comparing(TournamentMatch::getRoundNumber))
+                .map(this::winnerEntry)
+                .toList();
+
+        return buildQuarterOrSemifinalRound(
+                tournament,
+                TournamentMatchPhase.SEMIFINAL,
+                List.of(
+                        winners.get(0), winners.get(1),
+                        winners.get(2), winners.get(3)
+                ),
+                existingMatches
+        );
+    }
+
+    private TournamentMatch buildFinalFromCompletedPhase(
+            Tournament tournament,
+            List<TournamentMatch> completedSemifinals,
+            List<TournamentMatch> existingMatches
+    ) {
+        List<TournamentEntry> winners = completedSemifinals.stream()
+                .sorted(Comparator.comparing(TournamentMatch::getRoundNumber))
+                .map(this::winnerEntry)
+                .toList();
+
+        return buildSingleKnockoutMatch(
+                tournament,
+                TournamentMatchPhase.FINAL,
+                1,
+                "Final",
+                winners.get(0),
+                winners.get(1),
+                existingMatches,
+                0
+        );
+    }
+
+    private List<TournamentMatch> buildQuarterOrSemifinalRound(
+            Tournament tournament,
+            TournamentMatchPhase phase,
+            List<TournamentEntry> seededEntries,
+            List<TournamentMatch> existingMatches
+    ) {
+        List<TournamentMatch> matches = new ArrayList<>();
+        int matchCount = seededEntries.size() / 2;
+        String roundLabelPrefix = phase == TournamentMatchPhase.QUARTERFINAL ? "Cuartos de Final " : "Semifinal ";
+        for (int index = 0; index < matchCount; index++) {
+            matches.add(buildSingleKnockoutMatch(
+                    tournament,
+                    phase,
+                    index + 1,
+                    roundLabelPrefix + (index + 1),
+                    seededEntries.get(index * 2),
+                    seededEntries.get(index * 2 + 1),
+                    existingMatches,
+                    index
+            ));
+        }
+        return matches;
+    }
+
+    private TournamentMatch buildSingleKnockoutMatch(
+            Tournament tournament,
+            TournamentMatchPhase phase,
+            int roundNumber,
+            String roundLabel,
+            TournamentEntry teamOne,
+            TournamentEntry teamTwo,
+            List<TournamentMatch> existingMatches,
+            int slotOffset
+    ) {
+        List<String> courtNames = tournament.getCourtNames() == null || tournament.getCourtNames().isEmpty()
+                ? List.of("Cancha 1")
+                : tournament.getCourtNames();
+        int availableCourts = tournament.getAvailableCourts() == null || tournament.getAvailableCourts() <= 0
+                ? 1
+                : tournament.getAvailableCourts();
+
+        Instant lastScheduledAt = existingMatches.stream()
+                .map(TournamentMatch::getScheduledAt)
+                .filter(java.util.Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(tournament.getStartDate().atTime(18, 0).toInstant(ZoneOffset.UTC));
+        int roundBase = existingMatches.stream()
+                .map(TournamentMatch::getRoundNumber)
+                .max(Integer::compareTo)
+                .orElse(0);
+
+        LocalDate baseDate = lastScheduledAt.atZone(ZoneOffset.UTC).toLocalDate().plusDays(1);
+        LocalTime baseTime = switch (phase) {
+            case FINAL -> LocalTime.of(19, 0);
+            case SEMIFINAL -> LocalTime.of(18 + (slotOffset * 2), 0);
+            case QUARTERFINAL -> LocalTime.of(16 + (slotOffset * 2), 0);
+            default -> LocalTime.of(18, 0);
+        };
+
+        Instant scheduledAt = baseDate.atTime(baseTime).toInstant(ZoneOffset.UTC);
+
+        return TournamentMatch.builder()
+                .tournament(tournament)
+                .teamOneEntry(teamOne)
+                .teamTwoEntry(teamTwo)
+                .phase(phase)
+                .status(TournamentMatchStatus.SCHEDULED)
+                .roundNumber(roundBase + roundNumber)
+                .legNumber(null)
+                .roundLabel(roundLabel)
+                .scheduledAt(scheduledAt)
+                .courtName(courtNames.get(Math.min(slotOffset % availableCourts, courtNames.size() - 1)))
+                .build();
+    }
+
+    private TournamentEntry resolveEntry(Tournament tournament, Long entryId) {
+        return tournamentService.getEntries(tournament.getId()).stream()
+                .filter(entry -> entry.getId().equals(entryId))
+                .findFirst()
+                .orElseThrow(() -> new ConflictException("Tournament entry " + entryId + " was not found during playoff generation"));
+    }
+
+    private List<TournamentEntry> topEntries(Tournament tournament, List<TournamentStandingsEntryResponse> standings, int maxEntries) {
+        return standings.stream()
+                .limit(maxEntries)
+                .map(entry -> resolveEntry(tournament, entry.tournamentEntryId()))
+                .toList();
+    }
+
+    private TournamentEntry winnerEntry(TournamentMatch match) {
+        TournamentMatchResult result = tournamentMatchResultRepository.findByTournamentMatchId(match.getId())
+                .orElseThrow(() -> new ConflictException("A completed tournament match must have a stored result"));
+        return result.getWinnerTeam() == MatchWinnerTeam.TEAM_ONE
+                ? match.getTeamOneEntry()
+                : match.getTeamTwoEntry();
+    }
+
+    private boolean allCompleted(List<TournamentMatch> matches) {
+        return !matches.isEmpty() && matches.stream().allMatch(match -> match.getStatus() == TournamentMatchStatus.COMPLETED);
     }
 
     private TournamentMatchResult buildNewResult(
@@ -276,9 +551,8 @@ public class TournamentMatchService {
     }
 
     private void updateTournamentCompletionIfNeeded(Tournament tournament) {
-        boolean allCompleted = tournamentMatchRepository.findAllByTournamentIdOrderByRoundNumberAscIdAsc(tournament.getId())
-                .stream()
-                .allMatch(match -> match.getStatus() == TournamentMatchStatus.COMPLETED);
+        List<TournamentMatch> matches = tournamentMatchRepository.findAllByTournamentIdOrderByRoundNumberAscIdAsc(tournament.getId());
+        boolean allCompleted = !matches.isEmpty() && matches.stream().allMatch(match -> match.getStatus() == TournamentMatchStatus.COMPLETED);
 
         if (allCompleted) {
             tournament.setStatus(TournamentStatus.COMPLETED);

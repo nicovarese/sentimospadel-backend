@@ -7,6 +7,8 @@ public record CurrentUserResponse(
         Long id,
         String email,
         UserRole role,
-        UserStatus status
+        UserStatus status,
+        Long managedClubId,
+        String managedClubName
 ) {
 }

@@ -6,6 +6,7 @@ import java.util.List;
 public record TournamentStandingsResponse(
         Long tournamentId,
         TournamentStandingsTiebreak tiebreak,
-        List<TournamentStandingsEntryResponse> standings
+        List<TournamentStandingsEntryResponse> standings,
+        List<TournamentStandingsGroupResponse> groups
 ) {
 }
