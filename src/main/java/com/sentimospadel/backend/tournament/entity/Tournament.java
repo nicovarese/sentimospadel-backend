@@ -90,6 +90,12 @@ public class Tournament extends BaseEntity {
     @Column(name = "launched_at")
     private Instant launchedAt;
 
+    @Column(name = "archived", nullable = false)
+    private boolean archived;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     @Column(name = "available_courts")
     private Integer availableCourts;
 

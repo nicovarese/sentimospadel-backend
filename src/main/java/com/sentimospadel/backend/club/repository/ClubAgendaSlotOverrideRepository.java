@@ -17,6 +17,9 @@ public interface ClubAgendaSlotOverrideRepository extends JpaRepository<ClubAgen
     List<ClubAgendaSlotOverride> findAllByClubIdAndSlotDateBetween(Long clubId, LocalDate from, LocalDate to);
 
     @EntityGraph(attributePaths = {"club", "court"})
+    List<ClubAgendaSlotOverride> findAllByClubIdAndCourtIdAndSlotDateGreaterThanEqual(Long clubId, Long courtId, LocalDate from);
+
+    @EntityGraph(attributePaths = {"club", "court"})
     Optional<ClubAgendaSlotOverride> findByClubIdAndCourtIdAndSlotDateAndStartTime(
             Long clubId,
             Long courtId,

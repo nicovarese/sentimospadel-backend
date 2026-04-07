@@ -205,6 +205,24 @@ public class TournamentService {
         return toTournamentResponse(tournament, getEntries(tournamentId));
     }
 
+    @Transactional
+    public TournamentResponse archiveTournament(String email, Long tournamentId) {
+        Tournament tournament = getTournamentEntity(tournamentId);
+        PlayerProfile actor = playerProfileResolverService.getOrCreateByUserEmail(email);
+
+        ensureCreator(tournament, actor);
+
+        if (tournament.isArchived()) {
+            throw new ConflictException("This tournament is already archived");
+        }
+
+        tournament.setArchived(true);
+        tournament.setArchivedAt(Instant.now());
+        tournamentRepository.save(tournament);
+
+        return toTournamentResponse(tournament, getEntries(tournamentId));
+    }
+
     @Transactional(readOnly = true)
     public List<TournamentResponse> getTournaments() {
         return tournamentRepository.findAll()

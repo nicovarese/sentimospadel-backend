@@ -19,4 +19,7 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
 
     @EntityGraph(attributePaths = {"createdBy", "createdBy.user", "club"})
     List<Match> findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(Long clubId, Instant from, Instant to);
+
+    @EntityGraph(attributePaths = {"createdBy", "createdBy.user", "club"})
+    List<Match> findAllByClubIdAndScheduledAtGreaterThanEqualOrderByScheduledAtAsc(Long clubId, Instant from);
 }

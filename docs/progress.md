@@ -47,6 +47,47 @@
   - dynamic americano launch
   - dynamic americano result submit
 
+### Final Update
+- Closed the pending `club verification` workflow instead of leaving only onboarding flags
+- Added `/docs/frontend-backend-club-verification-alignment.md` to document the chosen contract
+- Added real backend verification-request persistence plus operational endpoints for:
+  - player request flow
+  - club-admin list
+  - approve
+  - reject
+- Rewired the current frontend player profile and club shell to consume that workflow without inventing a second source of truth
+- Kept the slice intentionally focused on official request / review state without opening document-upload or fraud-review scope
+
+### Latest Update
+- Closed the pending `club courts CRUD` slice instead of leaving `club_courts` as seed-only backend data
+- Added `/docs/frontend-backend-club-courts-alignment.md` to document the chosen contract
+- Added real backend club-court management endpoints for:
+  - list
+  - create
+  - update
+  - reorder
+- Kept delete as soft deactivate so the official agenda remains backend-owned
+- Added backend guardrails so:
+  - a court with future reservations cannot be deactivated
+  - a court with future real matches cannot be renamed in a way that would break location-based reconciliation
+- Rewired the current frontend club shell to expose a real `Canchas` management view and replaced the dead `Torneos` shortcut in the dashboard with that backend-driven flow
+
+### Newest Update
+- Hardened auth so new accounts no longer become active before email confirmation
+- Added `/docs/frontend-backend-auth-email-phone-search-alignment.md` to document the chosen contract
+- Extended backend auth registration so both `PLAYER` and `CLUB` accounts must send a phone number and both `email` and `phone` are unique
+- Added backend email-verification lifecycle:
+  - `PENDING_EMAIL_VERIFICATION`
+  - hashed verification token with expiration
+  - public verify endpoint
+  - resend endpoint
+- Added SMTP-backed delivery support with a local/dev `log-only` mode so the repo can run without a real mail provider
+- Rewired frontend register/login so registration no longer auto-logins and the login screen can resend the verification email for pending accounts
+- Created initial player profiles during player registration so display name stops depending on frontend-local storage immediately after signup
+- Audited the visible `buscar jugador` flows and confirmed:
+  - tournament player search works client-side over backend-loaded `/api/players`
+  - club booking invite search is still mock-based and remains outside this auth slice
+
 ## 2026-03-30
 
 ### Summary
@@ -487,15 +528,53 @@
 - Refresh tokens are still pending
 - Tournament logic, reservations, payments, and club verification workflow are still pending
 
+### Latest Updates
+- Club verification workflow is now implemented end-to-end:
+  - players can request verification from their profile
+  - club admins can approve or reject from club management
+  - the official player verification status is updated in backend
+- Club courts CRUD is now backend-driven:
+  - list
+  - create
+  - update
+  - activate/deactivate
+  - reorder
+- Registration hardening is now in place:
+  - phone is required
+  - email uniqueness is enforced
+  - phone uniqueness is enforced
+  - email verification is required before login
+- Legal consent is now backend-driven at registration:
+  - terms and conditions are fetched from backend
+  - privacy policy is fetched from backend
+  - required acceptances are validated in backend before account creation
+  - optional preferences for activity tracking and operational notifications are persisted
+- Public club booking is now backend-driven for MVP:
+  - `GET /api/clubs/{id}/booking-availability` exposes active courts plus official slot status
+  - frontend club booking now consumes real slot availability
+  - `POST /api/matches` now rejects blocked or already-reserved club slots
+  - booking UI no longer exposes invitations, private-lobby, or payment options without backend support
+- Tournament archive is now backend-driven:
+  - `POST /api/tournaments/{id}/archive`
+  - tournament reads now expose `archived` and `archivedAt`
+- Automated validation status after these slices:
+  - backend: `146` tests green
+  - frontend: `npm run lint` green
+  - frontend: `npm run build` green
+
 ### Pending Next Steps
-- Add the next player-profile lifecycle step so profile creation is explicit before other player features depend on it
-- Add persistence-backed integration tests for onboarding once database-backed test wiring is introduced
-- Add the actual club verification workflow for Primera/Segunda status transitions
-- Add the next stability slice around result amendment/dispute refinement if product still needs it
+- Remove remaining local tournament UI states:
+  - launch preview
+  - leftover legacy branches in frontend
+- Decide whether public club booking needs:
+  - real invitation workflow
+  - player search/contacts
+  - payment/billing
+  or whether those stay out of MVP
+- Expand in-app notifications coverage across the existing real flows
+- Add push delivery after the notification event model is complete
 - Add optional filter/query support on player-facing match history if product starts needing tabs like upcoming/completed/cancelled
 - Extend persistence-backed integration tests around rating-history reads and match lifecycle edge cases
-- Finish wiring ranking/history screens to the real backend endpoints now that social-match reads/actions are integrated
-- After lightweight filters on `/api/players/me/matches`, start tournament foundations
 
 ### Roadmap
 - Foundation stabilization

@@ -5,11 +5,16 @@ import com.sentimospadel.backend.club.dto.ClubManagementActivityResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaCourtResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaSlotResponse;
+import com.sentimospadel.backend.club.dto.ClubManagementCourtResponse;
+import com.sentimospadel.backend.club.dto.ClubManagementCourtsResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementDashboardResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementTopUserResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementUsersResponse;
 import com.sentimospadel.backend.club.dto.ClubQuickActionRequest;
 import com.sentimospadel.backend.club.dto.ClubQuickActionResponse;
+import com.sentimospadel.backend.club.dto.CreateClubCourtRequest;
+import com.sentimospadel.backend.club.dto.ReorderClubCourtsRequest;
+import com.sentimospadel.backend.club.dto.UpdateClubCourtRequest;
 import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.entity.ClubActivityLog;
 import com.sentimospadel.backend.club.entity.ClubAgendaSlotOverride;
@@ -41,6 +46,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,14 +84,12 @@ public class ClubManagementService {
     public ClubManagementDashboardResponse getDashboard(String authenticatedEmail) {
         Club managedClub = resolveManagedClub(authenticatedEmail);
         List<ClubCourt> courts = getManagedCourts(managedClub.getId());
+        List<ClubCourt> activeCourts = filterActiveCourts(courts);
         LocalDate today = LocalDate.now(CLUB_ZONE);
-        ClubManagementAgendaResponse todayAgenda = buildAgenda(managedClub, courts, today);
+        ClubManagementAgendaResponse todayAgenda = buildAgenda(managedClub, activeCourts, today);
+        int activeCourtsCount = activeCourts.size();
 
-        int activeCourtsCount = (int) todayAgenda.courts().stream()
-                .filter(court -> court.slots().stream().anyMatch(slot -> slot.status() != ClubAgendaSlotStatus.AVAILABLE))
-                .count();
-
-        BigDecimal todayRevenue = courts.stream()
+        BigDecimal todayRevenue = activeCourts.stream()
                 .flatMap(court -> todayAgenda.courts().stream()
                         .filter(courtResponse -> courtResponse.id().equals(court.getId()))
                         .flatMap(courtResponse -> courtResponse.slots().stream()
@@ -196,13 +200,117 @@ public class ClubManagementService {
     @Transactional(readOnly = true)
     public ClubManagementAgendaResponse getAgenda(String authenticatedEmail, LocalDate date) {
         Club managedClub = resolveManagedClub(authenticatedEmail);
-        return buildAgenda(managedClub, getManagedCourts(managedClub.getId()), date);
+        return buildAgenda(managedClub, getManagedActiveCourts(managedClub.getId()), date);
+    }
+
+    @Transactional(readOnly = true)
+    public ClubManagementCourtsResponse getCourts(String authenticatedEmail) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        return buildCourtsResponse(managedClub, getManagedCourts(managedClub.getId()));
+    }
+
+    @Transactional
+    public ClubManagementCourtsResponse createCourt(String authenticatedEmail, CreateClubCourtRequest request) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        List<ClubCourt> courts = getManagedCourts(managedClub.getId());
+        String requestedName = requireCourtName(request.name());
+
+        ensureCourtNameAvailable(courts, requestedName, null);
+
+        ClubCourt court = ClubCourt.builder()
+                .club(managedClub)
+                .name(requestedName)
+                .displayOrder(courts.stream()
+                        .map(ClubCourt::getDisplayOrder)
+                        .max(Integer::compareTo)
+                        .orElse(0) + 1)
+                .hourlyRateUyu(scaleCurrency(request.hourlyRateUyu()))
+                .active(true)
+                .build();
+
+        clubCourtRepository.save(court);
+        registerActivity(managedClub, "Cancha creada", court.getName() + " - $" + formatCurrency(court.getHourlyRateUyu()));
+        return buildCourtsResponse(managedClub, getManagedCourts(managedClub.getId()));
+    }
+
+    @Transactional
+    public ClubManagementCourtsResponse updateCourt(String authenticatedEmail, Long courtId, UpdateClubCourtRequest request) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        List<ClubCourt> courts = getManagedCourts(managedClub.getId());
+        ClubCourt court = courts.stream()
+                .filter(item -> item.getId().equals(courtId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Court with id " + courtId + " was not found"));
+
+        String requestedName = requireCourtName(request.name());
+        BigDecimal requestedRate = scaleCurrency(request.hourlyRateUyu());
+        boolean requestedActive = request.active();
+        boolean nameChanged = !court.getName().equals(requestedName);
+        boolean rateChanged = court.getHourlyRateUyu().compareTo(requestedRate) != 0;
+        boolean activeChanged = court.isActive() != requestedActive;
+
+        if (nameChanged) {
+            ensureCourtNameAvailable(courts, requestedName, court.getId());
+
+            if (hasFutureRealMatches(managedClub.getId(), courts, court)
+                    && !simplifyCourtName(court.getName()).equals(simplifyCourtName(requestedName))) {
+                throw new ConflictException("This court has future real matches and cannot be renamed until they are rescheduled");
+            }
+        }
+
+        if (court.isActive() && !requestedActive && hasFutureScheduledOccupancy(managedClub.getId(), courts, court)) {
+            throw new ConflictException("This court has future reservations or matches and cannot be deactivated");
+        }
+
+        court.setName(requestedName);
+        court.setHourlyRateUyu(requestedRate);
+        court.setActive(requestedActive);
+        clubCourtRepository.save(court);
+
+        if (activeChanged) {
+            registerActivity(
+                    managedClub,
+                    requestedActive ? "Cancha reactivada" : "Cancha desactivada",
+                    court.getName() + " - $" + formatCurrency(court.getHourlyRateUyu())
+            );
+        } else if (nameChanged || rateChanged) {
+            registerActivity(
+                    managedClub,
+                    "Cancha actualizada",
+                    court.getName() + " - $" + formatCurrency(court.getHourlyRateUyu())
+            );
+        }
+
+        return buildCourtsResponse(managedClub, getManagedCourts(managedClub.getId()));
+    }
+
+    @Transactional
+    public ClubManagementCourtsResponse reorderCourts(String authenticatedEmail, ReorderClubCourtsRequest request) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        List<ClubCourt> courts = getManagedCourts(managedClub.getId());
+
+        if (request.orderedCourtIds().size() != courts.size()
+                || new HashSet<>(request.orderedCourtIds()).size() != courts.size()
+                || !new HashSet<>(request.orderedCourtIds()).equals(courts.stream().map(ClubCourt::getId).collect(java.util.stream.Collectors.toSet()))) {
+            throw new ConflictException("Court reorder payload must include every managed court exactly once");
+        }
+
+        Map<Long, ClubCourt> courtById = courts.stream()
+                .collect(LinkedHashMap::new, (map, court) -> map.put(court.getId(), court), LinkedHashMap::putAll);
+
+        for (int index = 0; index < request.orderedCourtIds().size(); index++) {
+            courtById.get(request.orderedCourtIds().get(index)).setDisplayOrder(index + 1);
+        }
+
+        clubCourtRepository.saveAll(courtById.values());
+        registerActivity(managedClub, "Orden de canchas actualizado", "Se actualizo el orden visible del club");
+        return buildCourtsResponse(managedClub, getManagedCourts(managedClub.getId()));
     }
 
     @Transactional
     public ClubManagementAgendaResponse applyAgendaSlotAction(String authenticatedEmail, ClubAgendaSlotActionRequest request) {
         Club managedClub = resolveManagedClub(authenticatedEmail);
-        List<ClubCourt> courts = getManagedCourts(managedClub.getId());
+        List<ClubCourt> courts = getManagedActiveCourts(managedClub.getId());
         ClubCourt court = courts.stream()
                 .filter(item -> item.getId().equals(request.courtId()))
                 .findFirst()
@@ -267,9 +375,9 @@ public class ClubManagementService {
     public ClubQuickActionResponse executeQuickAction(String authenticatedEmail, ClubQuickActionRequest request) {
         Club managedClub = resolveManagedClub(authenticatedEmail);
         String message = switch (request.type()) {
-            case NOTIFY_USERS -> "Notificación enviada a usuarios activos";
-            case ACTIVATE_RESERVATION_PROMO -> "Promoción de reservas activada";
-            case ACTIVATE_LAST_MINUTE_DISCOUNT -> "Descuento 50% activado para los próximos 30 minutos";
+            case NOTIFY_USERS -> "Registro operativo guardado: aviso a usuarios";
+            case ACTIVATE_RESERVATION_PROMO -> "Registro operativo guardado: promocion de reservas";
+            case ACTIVATE_LAST_MINUTE_DISCOUNT -> "Registro operativo guardado: descuento de ultimo minuto";
         };
 
         registerActivity(managedClub, quickActionTitle(request.type()), message);
@@ -420,7 +528,33 @@ public class ClubManagementService {
     }
 
     private List<ClubCourt> getManagedCourts(Long clubId) {
+        return clubCourtRepository.findAllByClubIdOrderByDisplayOrderAscIdAsc(clubId);
+    }
+
+    private List<ClubCourt> getManagedActiveCourts(Long clubId) {
         return clubCourtRepository.findAllByClubIdAndActiveTrueOrderByDisplayOrderAsc(clubId);
+    }
+
+    private List<ClubCourt> filterActiveCourts(List<ClubCourt> courts) {
+        return courts.stream().filter(ClubCourt::isActive).toList();
+    }
+
+    private ClubManagementCourtsResponse buildCourtsResponse(Club managedClub, List<ClubCourt> courts) {
+        return new ClubManagementCourtsResponse(
+                managedClub.getId(),
+                managedClub.getName(),
+                (int) courts.stream().filter(ClubCourt::isActive).count(),
+                courts.size(),
+                courts.stream()
+                        .map(court -> new ClubManagementCourtResponse(
+                                court.getId(),
+                                court.getName(),
+                                court.getDisplayOrder(),
+                                court.getHourlyRateUyu(),
+                                court.isActive()
+                        ))
+                        .toList()
+        );
     }
 
     private List<MatchParticipant> loadParticipants(List<Match> matches) {
@@ -446,10 +580,44 @@ public class ClubManagementService {
 
     private List<String> buildCourtAliases(ClubCourt court) {
         String normalizedName = normalize(court.getName());
-        String simplified = normalizedName.replaceAll("\\s*\\([^)]*\\)", "").trim();
+        String simplified = simplifyCourtName(normalizedName);
         return normalizedName.equals(simplified)
                 ? List.of(normalizedName)
                 : List.of(normalizedName, simplified);
+    }
+
+    private boolean hasFutureScheduledOccupancy(Long clubId, List<ClubCourt> courts, ClubCourt court) {
+        return hasFutureSlotOverrides(clubId, court) || hasFutureRealMatches(clubId, courts, court);
+    }
+
+    private boolean hasFutureSlotOverrides(Long clubId, ClubCourt court) {
+        LocalDate today = LocalDate.now(CLUB_ZONE);
+        LocalTime now = LocalTime.now(CLUB_ZONE).withSecond(0).withNano(0);
+        return clubAgendaSlotOverrideRepository.findAllByClubIdAndCourtIdAndSlotDateGreaterThanEqual(clubId, court.getId(), today).stream()
+                .anyMatch(override -> override.getSlotDate().isAfter(today)
+                        || !override.getStartTime().isBefore(now));
+    }
+
+    private boolean hasFutureRealMatches(Long clubId, Collection<ClubCourt> courts, ClubCourt targetCourt) {
+        return matchRepository.findAllByClubIdAndScheduledAtGreaterThanEqualOrderByScheduledAtAsc(clubId, Instant.now()).stream()
+                .filter(match -> match.getStatus() != MatchStatus.CANCELLED)
+                .map(match -> resolveCourtForMatch(match, courts)
+                        .filter(court -> court.getId().equals(targetCourt.getId()))
+                        .isPresent())
+                .anyMatch(Boolean::booleanValue);
+    }
+
+    private void ensureCourtNameAvailable(List<ClubCourt> courts, String requestedName, Long ignoredCourtId) {
+        String normalizedRequestedName = normalize(requestedName);
+        boolean exists = courts.stream()
+                .filter(court -> ignoredCourtId == null || !court.getId().equals(ignoredCourtId))
+                .map(ClubCourt::getName)
+                .map(this::normalize)
+                .anyMatch(normalizedRequestedName::equals);
+
+        if (exists) {
+            throw new ConflictException("Court names must be unique within the club");
+        }
     }
 
     private void registerActivity(Club managedClub, String title, String description) {
@@ -463,9 +631,9 @@ public class ClubManagementService {
 
     private String quickActionTitle(ClubQuickActionType type) {
         return switch (type) {
-            case NOTIFY_USERS -> "Notificación enviada";
-            case ACTIVATE_RESERVATION_PROMO -> "Promoción activada";
-            case ACTIVATE_LAST_MINUTE_DISCOUNT -> "50% OFF activado";
+            case NOTIFY_USERS -> "Aviso registrado";
+            case ACTIVATE_RESERVATION_PROMO -> "Promocion registrada";
+            case ACTIVATE_LAST_MINUTE_DISCOUNT -> "Descuento registrado";
         };
     }
 
@@ -489,6 +657,15 @@ public class ClubManagementService {
         return value.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String simplifyCourtName(String value) {
+        String normalizedValue = normalize(value);
+        if (normalizedValue == null) {
+            return null;
+        }
+
+        return normalizedValue.replaceAll("\\s*\\([^)]*\\)", "").trim();
+    }
+
     private String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -496,6 +673,23 @@ public class ClubManagementService {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String requireCourtName(String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new ConflictException("Court name must not be blank");
+        }
+
+        return trimmed;
+    }
+
+    private BigDecimal scaleCurrency(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String formatCurrency(BigDecimal value) {
+        return scaleCurrency(value).toPlainString();
     }
 
     private BigDecimal divideOrZero(BigDecimal dividend, int divisor, int scale) {

@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,6 +42,9 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Column(name = "phone", nullable = false, unique = true, length = 40)
+    private String phone;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 50)
     private UserRole role;
@@ -48,6 +52,42 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     private UserStatus status;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
+    @Column(name = "email_verification_token_hash", length = 64)
+    private String emailVerificationTokenHash;
+
+    @Column(name = "email_verification_token_expires_at")
+    private Instant emailVerificationTokenExpiresAt;
+
+    @Column(name = "accepted_terms_version", length = 40)
+    private String acceptedTermsVersion;
+
+    @Column(name = "accepted_terms_at")
+    private Instant acceptedTermsAt;
+
+    @Column(name = "accepted_privacy_version", length = 40)
+    private String acceptedPrivacyVersion;
+
+    @Column(name = "accepted_privacy_at")
+    private Instant acceptedPrivacyAt;
+
+    @Column(name = "consent_preferences_version", length = 40)
+    private String consentPreferencesVersion;
+
+    @Column(name = "activity_tracking_enabled", nullable = false)
+    private boolean activityTrackingEnabled;
+
+    @Column(name = "activity_tracking_updated_at")
+    private Instant activityTrackingUpdatedAt;
+
+    @Column(name = "operational_notifications_enabled", nullable = false)
+    private boolean operationalNotificationsEnabled;
+
+    @Column(name = "operational_notifications_updated_at")
+    private Instant operationalNotificationsUpdatedAt;
 
     @ManyToOne
     @JoinColumn(name = "managed_club_id")

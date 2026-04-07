@@ -61,7 +61,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/verify-email", "/api/auth/verify-email/resend").permitAll()
                         .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me", "/api/players/me/**", "/api/notifications", "/api/notifications/**", "/api/clubs/me/management/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
                         .requestMatchers(
@@ -70,6 +70,7 @@ public class SecurityConfig {
                                 "/api/tournaments/*/join",
                                 "/api/tournaments/*/leave",
                                 "/api/tournaments/*/launch",
+                                "/api/tournaments/*/archive",
                                 "/api/tournaments/*/matches/*/result",
                                 "/api/tournaments/*/matches/*/result/confirm",
                                 "/api/tournaments/*/matches/*/result/reject"

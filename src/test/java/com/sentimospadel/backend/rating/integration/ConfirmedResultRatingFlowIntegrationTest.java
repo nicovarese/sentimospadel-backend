@@ -143,11 +143,14 @@ class ConfirmedResultRatingFlowIntegrationTest {
     }
 
     private PlayerProfile createPlayer(String email, String fullName, String rating) {
+        String numericHash = Integer.toUnsignedString(email.hashCode());
         User user = userRepository.save(User.builder()
                 .email(email)
+                .phone("5989" + numericHash)
                 .passwordHash("hash")
                 .role(UserRole.PLAYER)
                 .status(UserStatus.ACTIVE)
+                .emailVerifiedAt(Instant.parse("2026-03-01T10:00:00Z"))
                 .build());
 
         return playerProfileRepository.save(PlayerProfile.builder()

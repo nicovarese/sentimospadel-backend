@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.sentimospadel.backend.club.entity.Club;
-import com.sentimospadel.backend.club.repository.ClubRepository;
+import com.sentimospadel.backend.club.service.ClubBookingService;
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
 import com.sentimospadel.backend.match.dto.MatchScoreRequest;
@@ -59,7 +59,7 @@ class MatchServiceTest {
     private MatchResultRepository matchResultRepository;
 
     @Mock
-    private ClubRepository clubRepository;
+    private ClubBookingService clubBookingService;
 
     @Mock
     private PlayerProfileResolverService playerProfileResolverService;
@@ -75,7 +75,7 @@ class MatchServiceTest {
                 matchRepository,
                 matchParticipantRepository,
                 matchResultRepository,
-                clubRepository,
+                clubBookingService,
                 playerProfileResolverService,
                 ratingApplicationService
         );
@@ -88,7 +88,7 @@ class MatchServiceTest {
         ReflectionTestUtils.setField(club, "id", 7L);
 
         when(playerProfileResolverService.getOrCreateByUserEmail("player@example.com")).thenReturn(creator);
-        when(clubRepository.findById(7L)).thenReturn(Optional.of(club));
+        when(clubBookingService.resolveClubBooking(7L, Instant.parse("2026-03-20T20:00:00Z"), "Rambla")).thenReturn(club);
         when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> {
             Match match = invocation.getArgument(0);
             ReflectionTestUtils.setField(match, "id", 1L);

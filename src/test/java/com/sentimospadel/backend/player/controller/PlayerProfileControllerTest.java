@@ -3,6 +3,7 @@ package com.sentimospadel.backend.player.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,6 +35,10 @@ import com.sentimospadel.backend.rating.dto.RatingHistoryEntryResponse;
 import com.sentimospadel.backend.rating.dto.RatingHistoryMatchSummaryResponse;
 import com.sentimospadel.backend.rating.service.PlayerRatingHistoryService;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
+import com.sentimospadel.backend.verification.dto.PlayerClubVerificationRequestResponse;
+import com.sentimospadel.backend.verification.dto.PlayerClubVerificationSummaryResponse;
+import com.sentimospadel.backend.verification.enums.ClubVerificationRequestStatus;
+import com.sentimospadel.backend.verification.service.ClubVerificationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -70,6 +76,9 @@ class PlayerProfileControllerTest {
     @Mock
     private PlayerInboxService playerInboxService;
 
+    @Mock
+    private ClubVerificationService clubVerificationService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -79,7 +88,8 @@ class PlayerProfileControllerTest {
                         playerInsightService,
                         playerRatingHistoryService,
                         playerMatchHistoryService,
-                        playerInboxService
+                        playerInboxService,
+                        clubVerificationService
                 ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addFilters(new MeAuthenticationRequiredFilter())
@@ -107,6 +117,12 @@ class PlayerProfileControllerTest {
     @Test
     void myPendingActionsRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/players/me/pending-actions"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void myClubVerificationRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/players/me/club-verification"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -297,6 +313,70 @@ class PlayerProfileControllerTest {
                 .andExpect(jsonPath("$[0].type").value("SUBMIT_MATCH_RESULT"))
                 .andExpect(jsonPath("$[0].notificationStatus").value("UNREAD"))
                 .andExpect(jsonPath("$[0].matchId").value(80));
+    }
+
+    @Test
+    void myClubVerificationReturnsSummary() throws Exception {
+        when(clubVerificationService.getMyVerificationSummary("player@example.com")).thenReturn(
+                new PlayerClubVerificationSummaryResponse(
+                        true,
+                        ClubVerificationStatus.PENDING,
+                        false,
+                        List.of(new PlayerClubVerificationRequestResponse(
+                                40L,
+                                1L,
+                                "Top Padel",
+                                "Montevideo",
+                                ClubVerificationRequestStatus.PENDING,
+                                Instant.parse("2026-03-31T12:00:00Z"),
+                                null,
+                                null
+                        ))
+                )
+        );
+
+        mockMvc.perform(get("/api/players/me/club-verification")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresClubVerification").value(true))
+                .andExpect(jsonPath("$.clubVerificationStatus").value("PENDING"))
+                .andExpect(jsonPath("$.requests[0].clubName").value("Top Padel"));
+    }
+
+    @Test
+    void createMyClubVerificationRequestReturnsUpdatedSummary() throws Exception {
+        when(clubVerificationService.createMyVerificationRequest(
+                org.mockito.ArgumentMatchers.eq("player@example.com"),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(
+                new PlayerClubVerificationSummaryResponse(
+                        true,
+                        ClubVerificationStatus.PENDING,
+                        false,
+                        List.of(new PlayerClubVerificationRequestResponse(
+                                41L,
+                                2L,
+                                "World Padel",
+                                "Montevideo",
+                                ClubVerificationRequestStatus.PENDING,
+                                Instant.parse("2026-03-31T13:00:00Z"),
+                                null,
+                                null
+                        ))
+                )
+        );
+
+        mockMvc.perform(post("/api/players/me/club-verification/request")
+                        .principal(new TestingAuthenticationToken("player@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clubId": 2
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requests[0].clubId").value(2))
+                .andExpect(jsonPath("$.requests[0].clubName").value("World Padel"));
     }
 
     @Test

@@ -13,14 +13,20 @@ import com.sentimospadel.backend.notification.dto.PendingActionResponse;
 import com.sentimospadel.backend.notification.service.PlayerInboxService;
 import com.sentimospadel.backend.rating.dto.RatingHistoryEntryResponse;
 import com.sentimospadel.backend.rating.service.PlayerRatingHistoryService;
+import com.sentimospadel.backend.verification.dto.CreateClubVerificationRequest;
+import com.sentimospadel.backend.verification.dto.PlayerClubVerificationSummaryResponse;
+import com.sentimospadel.backend.verification.service.ClubVerificationService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/players")
@@ -32,6 +38,7 @@ public class PlayerProfileController {
     private final PlayerRatingHistoryService playerRatingHistoryService;
     private final PlayerMatchHistoryService playerMatchHistoryService;
     private final PlayerInboxService playerInboxService;
+    private final ClubVerificationService clubVerificationService;
 
     @GetMapping("/me")
     public PlayerProfileResponse getMyPlayerProfile(Authentication authentication) {
@@ -57,6 +64,19 @@ public class PlayerProfileController {
     @GetMapping("/me/pending-actions")
     public List<PendingActionResponse> getMyPendingActions(Authentication authentication) {
         return playerInboxService.getMyPendingActions(authentication.getName());
+    }
+
+    @GetMapping("/me/club-verification")
+    public PlayerClubVerificationSummaryResponse getMyClubVerification(Authentication authentication) {
+        return clubVerificationService.getMyVerificationSummary(authentication.getName());
+    }
+
+    @PostMapping("/me/club-verification/request")
+    public PlayerClubVerificationSummaryResponse createMyClubVerificationRequest(
+            Authentication authentication,
+            @Valid @RequestBody CreateClubVerificationRequest request
+    ) {
+        return clubVerificationService.createMyVerificationRequest(authentication.getName(), request);
     }
 
     @GetMapping("/me/top-partners")

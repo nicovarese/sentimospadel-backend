@@ -5,19 +5,27 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaCourtResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementAgendaSlotResponse;
+import com.sentimospadel.backend.club.dto.ClubManagementCourtResponse;
+import com.sentimospadel.backend.club.dto.ClubManagementCourtsResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementDashboardResponse;
 import com.sentimospadel.backend.club.dto.ClubManagementUsersResponse;
 import com.sentimospadel.backend.club.dto.ClubQuickActionResponse;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotStatus;
 import com.sentimospadel.backend.club.service.ClubManagementService;
+import com.sentimospadel.backend.player.enums.UruguayCategory;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
+import com.sentimospadel.backend.verification.dto.ClubVerificationManagementRequestResponse;
+import com.sentimospadel.backend.verification.enums.ClubVerificationRequestStatus;
+import com.sentimospadel.backend.verification.service.ClubVerificationService;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,9 +47,12 @@ class ClubManagementControllerTest {
     @Mock
     private ClubManagementService clubManagementService;
 
+    @Mock
+    private ClubVerificationService clubVerificationService;
+
     @BeforeEach
     void setUp() {
-        ClubManagementController controller = new ClubManagementController(clubManagementService);
+        ClubManagementController controller = new ClubManagementController(clubManagementService, clubVerificationService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -88,6 +99,104 @@ class ClubManagementControllerTest {
                 .andExpect(jsonPath("$.clubName").value("Top Padel"))
                 .andExpect(jsonPath("$.activeUsersCount").value(24))
                 .andExpect(jsonPath("$.newUsersThisMonthCount").value(5));
+    }
+
+    @Test
+    void getCourtsReturnsManagedCourtConfiguration() throws Exception {
+        when(clubManagementService.getCourts("club.admin@sentimospadel.test"))
+                .thenReturn(new ClubManagementCourtsResponse(
+                        1L,
+                        "Top Padel",
+                        2,
+                        3,
+                        List.of(
+                                new ClubManagementCourtResponse(10L, "Cancha 1", 1, BigDecimal.valueOf(1200), true),
+                                new ClubManagementCourtResponse(11L, "Cancha 2", 2, BigDecimal.valueOf(1200), false)
+                        )
+                ));
+
+        mockMvc.perform(get("/api/clubs/me/management/courts").principal(authentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeCourtsCount").value(2))
+                .andExpect(jsonPath("$.totalCourtsCount").value(3))
+                .andExpect(jsonPath("$.courts[1].active").value(false));
+    }
+
+    @Test
+    void createCourtReturnsUpdatedSnapshot() throws Exception {
+        when(clubManagementService.createCourt(eq("club.admin@sentimospadel.test"), any()))
+                .thenReturn(new ClubManagementCourtsResponse(
+                        1L,
+                        "Top Padel",
+                        3,
+                        3,
+                        List.of(new ClubManagementCourtResponse(12L, "Cancha 3", 3, BigDecimal.valueOf(1150), true))
+                ));
+
+        mockMvc.perform(post("/api/clubs/me/management/courts")
+                        .principal(authentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Cancha 3",
+                                  "hourlyRateUyu": 1150
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courts[0].name").value("Cancha 3"))
+                .andExpect(jsonPath("$.courts[0].hourlyRateUyu").value(1150));
+    }
+
+    @Test
+    void updateCourtReturnsUpdatedSnapshot() throws Exception {
+        when(clubManagementService.updateCourt(eq("club.admin@sentimospadel.test"), eq(10L), any()))
+                .thenReturn(new ClubManagementCourtsResponse(
+                        1L,
+                        "Top Padel",
+                        1,
+                        2,
+                        List.of(new ClubManagementCourtResponse(10L, "Cancha Central", 1, BigDecimal.valueOf(1400), true))
+                ));
+
+        mockMvc.perform(put("/api/clubs/me/management/courts/10")
+                        .principal(authentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Cancha Central",
+                                  "hourlyRateUyu": 1400,
+                                  "active": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courts[0].name").value("Cancha Central"));
+    }
+
+    @Test
+    void reorderCourtsReturnsUpdatedSnapshot() throws Exception {
+        when(clubManagementService.reorderCourts(eq("club.admin@sentimospadel.test"), any()))
+                .thenReturn(new ClubManagementCourtsResponse(
+                        1L,
+                        "Top Padel",
+                        2,
+                        2,
+                        List.of(
+                                new ClubManagementCourtResponse(11L, "Cancha 2", 1, BigDecimal.valueOf(1200), true),
+                                new ClubManagementCourtResponse(10L, "Cancha 1", 2, BigDecimal.valueOf(1200), true)
+                        )
+                ));
+
+        mockMvc.perform(post("/api/clubs/me/management/courts/reorder")
+                        .principal(authentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "orderedCourtIds": [11, 10]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courts[0].id").value(11))
+                .andExpect(jsonPath("$.courts[0].displayOrder").value(1));
     }
 
     @Test
@@ -145,7 +254,7 @@ class ClubManagementControllerTest {
     @Test
     void executeQuickActionReturnsMessage() throws Exception {
         when(clubManagementService.executeQuickAction(eq("club.admin@sentimospadel.test"), any()))
-                .thenReturn(new ClubQuickActionResponse("Notificación enviada a usuarios activos"));
+                .thenReturn(new ClubQuickActionResponse("Registro operativo guardado: aviso a usuarios"));
 
         mockMvc.perform(post("/api/clubs/me/management/quick-actions")
                         .principal(authentication())
@@ -156,10 +265,68 @@ class ClubManagementControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Notificación enviada a usuarios activos"));
+                .andExpect(jsonPath("$.message").value("Registro operativo guardado: aviso a usuarios"));
+    }
+
+    @Test
+    void getVerificationRequestsReturnsManagedClubQueue() throws Exception {
+        when(clubVerificationService.getManagedClubRequests("club.admin@sentimospadel.test"))
+                .thenReturn(List.of(
+                        new ClubVerificationManagementRequestResponse(
+                                10L,
+                                100L,
+                                "Player One",
+                                null,
+                                "Montevideo",
+                                BigDecimal.valueOf(5.90),
+                                UruguayCategory.SEGUNDA,
+                                Instant.parse("2026-03-31T13:00:00Z"),
+                                ClubVerificationRequestStatus.PENDING,
+                                null,
+                                null
+                        )
+                ));
+
+        mockMvc.perform(get("/api/clubs/me/management/verification-requests")
+                        .principal(authentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].playerFullName").value("Player One"))
+                .andExpect(jsonPath("$[0].status").value("PENDING"));
+    }
+
+    @Test
+    void approveVerificationRequestReturnsReviewedRequest() throws Exception {
+        when(clubVerificationService.approveManagedClubRequest(eq("club.admin@sentimospadel.test"), eq(10L), any()))
+                .thenReturn(new ClubVerificationManagementRequestResponse(
+                        10L,
+                        100L,
+                        "Player One",
+                        null,
+                        "Montevideo",
+                        BigDecimal.valueOf(5.90),
+                        UruguayCategory.SEGUNDA,
+                        Instant.parse("2026-03-31T13:00:00Z"),
+                        ClubVerificationRequestStatus.APPROVED,
+                        Instant.parse("2026-03-31T15:00:00Z"),
+                        "Validado en torneo interno"
+                ));
+
+        mockMvc.perform(post("/api/clubs/me/management/verification-requests/10/approve")
+                        .principal(authentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "notes": "Validado en torneo interno"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.reviewNotes").value("Validado en torneo interno"));
     }
 
     private Authentication authentication() {
         return new UsernamePasswordAuthenticationToken("club.admin@sentimospadel.test", "n/a", List.of());
     }
 }
+
+

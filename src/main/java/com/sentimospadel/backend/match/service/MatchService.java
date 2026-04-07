@@ -1,7 +1,7 @@
 package com.sentimospadel.backend.match.service;
 
 import com.sentimospadel.backend.club.entity.Club;
-import com.sentimospadel.backend.club.repository.ClubRepository;
+import com.sentimospadel.backend.club.service.ClubBookingService;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
 import com.sentimospadel.backend.match.dto.MatchParticipantResponse;
@@ -48,14 +48,14 @@ public class MatchService {
     private final MatchRepository matchRepository;
     private final MatchParticipantRepository matchParticipantRepository;
     private final MatchResultRepository matchResultRepository;
-    private final ClubRepository clubRepository;
+    private final ClubBookingService clubBookingService;
     private final PlayerProfileResolverService playerProfileResolverService;
     private final RatingApplicationService ratingApplicationService;
 
     @Transactional
     public MatchResponse createMatch(String email, CreateMatchRequest request) {
         PlayerProfile playerProfile = playerProfileResolverService.getOrCreateByUserEmail(email);
-        Club club = resolveClub(request.clubId());
+        Club club = clubBookingService.resolveClubBooking(request.clubId(), request.scheduledAt(), request.locationText());
 
         Match match = Match.builder()
                 .createdBy(playerProfile)
@@ -355,15 +355,6 @@ public class MatchService {
     private Match getMatchEntity(Long matchId) {
         return matchRepository.findById(matchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Match with id " + matchId + " was not found"));
-    }
-
-    private Club resolveClub(Long clubId) {
-        if (clubId == null) {
-            return null;
-        }
-
-        return clubRepository.findById(clubId)
-                .orElseThrow(() -> new ResourceNotFoundException("Club with id " + clubId + " was not found"));
     }
 
     private MatchResponse toResponse(Match match) {

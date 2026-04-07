@@ -1,6 +1,17 @@
 spring:
   application:
     name: backend
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/sentimospadel?currentSchema=public}
     username: ${DB_USERNAME:sentimospadel_user}
@@ -37,6 +48,14 @@ management:
         enabled: true
 
 app:
+  auth:
+    email-verification:
+      log-only: ${EMAIL_VERIFICATION_LOG_ONLY:true}
+      verification-base-url: ${EMAIL_VERIFICATION_BASE_URL:http://localhost:8080/api/auth/verify-email}
+      from-address: ${EMAIL_VERIFICATION_FROM:no-reply@sentimospadel.test}
+      login-url: ${EMAIL_VERIFICATION_LOGIN_URL:http://localhost:3000}
+      expiration: ${EMAIL_VERIFICATION_EXPIRATION:24h}
+      subject: ${EMAIL_VERIFICATION_SUBJECT:Confirma tu email en Sentimos Padel}
   security:
     jwt:
       secret: ${JWT_SECRET:change-this-local-jwt-secret-change-this-local-jwt-secret}

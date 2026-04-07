@@ -11,4 +11,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    boolean existsByPhone(String phone);
+
+    @EntityGraph(attributePaths = {"managedClub"})
+    Optional<User> findByEmailVerificationTokenHash(String emailVerificationTokenHash);
 }

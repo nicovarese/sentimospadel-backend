@@ -72,6 +72,11 @@ public class TournamentController {
         return tournamentService.launchTournament(authentication.getName(), id, request);
     }
 
+    @PostMapping("/{id}/archive")
+    public TournamentResponse archiveTournament(Authentication authentication, @PathVariable Long id) {
+        return tournamentService.archiveTournament(authentication.getName(), id);
+    }
+
     @GetMapping
     public List<TournamentResponse> getTournaments() {
         return tournamentService.getTournaments();
