@@ -6,6 +6,8 @@ import com.sentimospadel.backend.auth.dto.EmailVerificationDispatchResponse;
 import com.sentimospadel.backend.auth.dto.EmailVerificationPageResult;
 import com.sentimospadel.backend.auth.dto.LoginRequest;
 import com.sentimospadel.backend.auth.dto.LoginResponse;
+import com.sentimospadel.backend.auth.dto.LogoutResponse;
+import com.sentimospadel.backend.auth.dto.RefreshTokenRequest;
 import com.sentimospadel.backend.auth.dto.RegisterRequest;
 import com.sentimospadel.backend.auth.dto.RegisterResponse;
 import com.sentimospadel.backend.auth.dto.ResendEmailVerificationRequest;
@@ -55,6 +57,7 @@ public class AuthService {
     private final EmailVerificationProperties emailVerificationProperties;
     private final EmailVerificationNotificationService emailVerificationNotificationService;
     private final LegalDocumentService legalDocumentService;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
@@ -103,16 +106,19 @@ public class AuthService {
                 UsernamePasswordAuthenticationToken.unauthenticated(normalizedEmail, request.password())
         );
 
-        return new LoginResponse(
-                jwtService.generateAccessToken(user),
-                "Bearer",
-                user.getId(),
-                user.getEmail(),
-                user.getRole(),
-                user.getStatus(),
-                user.getManagedClub() != null ? user.getManagedClub().getId() : null,
-                user.getManagedClub() != null ? user.getManagedClub().getName() : null
-        );
+        return buildLoginResponse(user);
+    }
+
+    @Transactional
+    public LoginResponse refresh(RefreshTokenRequest request) {
+        User user = refreshTokenService.rotateAndResolveUser(requireNonBlank(request.refreshToken(), "Refresh token is required"));
+        return buildLoginResponse(user);
+    }
+
+    @Transactional
+    public LogoutResponse logout(RefreshTokenRequest request) {
+        refreshTokenService.revoke(requireNonBlank(request.refreshToken(), "Refresh token is required"));
+        return new LogoutResponse("Sesion cerrada.");
     }
 
     @Transactional
@@ -258,6 +264,22 @@ public class AuthService {
                 .operationalNotificationsEnabled(Boolean.TRUE.equals(request.allowOperationalNotifications()))
                 .operationalNotificationsUpdatedAt(now)
                 .build();
+    }
+
+    private LoginResponse buildLoginResponse(User user) {
+        RefreshTokenService.IssuedRefreshToken issuedRefreshToken = refreshTokenService.issue(user);
+        return new LoginResponse(
+                jwtService.generateAccessToken(user),
+                issuedRefreshToken.token(),
+                issuedRefreshToken.expiresAt(),
+                "Bearer",
+                user.getId(),
+                user.getEmail(),
+                user.getRole(),
+                user.getStatus(),
+                user.getManagedClub() != null ? user.getManagedClub().getId() : null,
+                user.getManagedClub() != null ? user.getManagedClub().getName() : null
+        );
     }
 
     private void validateRegistrationConsents(RegisterRequest request) {

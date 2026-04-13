@@ -5,6 +5,8 @@ import com.sentimospadel.backend.auth.dto.EmailVerificationDispatchResponse;
 import com.sentimospadel.backend.auth.dto.EmailVerificationPageResult;
 import com.sentimospadel.backend.auth.dto.LoginRequest;
 import com.sentimospadel.backend.auth.dto.LoginResponse;
+import com.sentimospadel.backend.auth.dto.LogoutResponse;
+import com.sentimospadel.backend.auth.dto.RefreshTokenRequest;
 import com.sentimospadel.backend.auth.dto.RegisterRequest;
 import com.sentimospadel.backend.auth.dto.RegisterResponse;
 import com.sentimospadel.backend.auth.dto.ResendEmailVerificationRequest;
@@ -67,6 +69,16 @@ public class AuthController {
     ) {
         authRateLimiter.checkLogin(servletRequest, request);
         return authService.login(request);
+    }
+
+    @PostMapping("/refresh")
+    public LoginResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return authService.refresh(request);
+    }
+
+    @PostMapping("/logout")
+    public LogoutResponse logout(@Valid @RequestBody RefreshTokenRequest request) {
+        return authService.logout(request);
     }
 
     @GetMapping("/me")

@@ -64,6 +64,8 @@ app:
       resend-verification:
         max-attempts: ${AUTH_RATE_LIMIT_RESEND_VERIFICATION_MAX_ATTEMPTS:3}
         window: ${AUTH_RATE_LIMIT_RESEND_VERIFICATION_WINDOW:15m}
+    refresh-token:
+      expiration: ${AUTH_REFRESH_TOKEN_EXPIRATION:30d}
     email-verification:
       log-only: ${EMAIL_VERIFICATION_LOG_ONLY:true}
       verification-base-url: ${EMAIL_VERIFICATION_BASE_URL:http://localhost:8080/api/auth/verify-email}

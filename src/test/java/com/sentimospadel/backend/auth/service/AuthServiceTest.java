@@ -72,6 +72,9 @@ class AuthServiceTest {
     @Mock
     private LegalDocumentService legalDocumentService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -85,7 +88,8 @@ class AuthServiceTest {
                 jwtService,
                 emailVerificationProperties,
                 emailVerificationNotificationService,
-                legalDocumentService
+                legalDocumentService,
+                refreshTokenService
         );
     }
 
@@ -189,12 +193,18 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest(" Player@Example.com ", "secret123");
 
         when(jwtService.generateAccessToken(user)).thenReturn("jwt-token");
+        when(refreshTokenService.issue(user)).thenReturn(new RefreshTokenService.IssuedRefreshToken(
+                "refresh-token",
+                Instant.parse("2026-04-12T12:00:00Z")
+        ));
         when(userRepository.findByEmail("player@example.com")).thenReturn(java.util.Optional.of(user));
 
         LoginResponse response = authService.login(request);
 
         verify(authenticationManager).authenticate(any());
         assertEquals("jwt-token", response.accessToken());
+        assertEquals("refresh-token", response.refreshToken());
+        assertEquals(Instant.parse("2026-04-12T12:00:00Z"), response.refreshTokenExpiresAt());
         assertEquals("Bearer", response.tokenType());
         assertEquals("player@example.com", response.email());
         assertEquals(UserRole.PLAYER, response.role());
