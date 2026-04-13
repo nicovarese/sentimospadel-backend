@@ -53,6 +53,17 @@ management:
 
 app:
   auth:
+    rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      login:
+        max-attempts: ${AUTH_RATE_LIMIT_LOGIN_MAX_ATTEMPTS:5}
+        window: ${AUTH_RATE_LIMIT_LOGIN_WINDOW:10m}
+      register:
+        max-attempts: ${AUTH_RATE_LIMIT_REGISTER_MAX_ATTEMPTS:3}
+        window: ${AUTH_RATE_LIMIT_REGISTER_WINDOW:1h}
+      resend-verification:
+        max-attempts: ${AUTH_RATE_LIMIT_RESEND_VERIFICATION_MAX_ATTEMPTS:3}
+        window: ${AUTH_RATE_LIMIT_RESEND_VERIFICATION_WINDOW:15m}
     email-verification:
       log-only: ${EMAIL_VERIFICATION_LOG_ONLY:true}
       verification-base-url: ${EMAIL_VERIFICATION_BASE_URL:http://localhost:8080/api/auth/verify-email}

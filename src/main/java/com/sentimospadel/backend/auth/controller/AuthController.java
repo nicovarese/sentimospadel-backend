@@ -8,7 +8,9 @@ import com.sentimospadel.backend.auth.dto.LoginResponse;
 import com.sentimospadel.backend.auth.dto.RegisterRequest;
 import com.sentimospadel.backend.auth.dto.RegisterResponse;
 import com.sentimospadel.backend.auth.dto.ResendEmailVerificationRequest;
+import com.sentimospadel.backend.auth.ratelimit.AuthRateLimiter;
 import com.sentimospadel.backend.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
@@ -29,17 +31,24 @@ import org.springframework.web.util.HtmlUtils;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuthRateLimiter authRateLimiter;
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        authRateLimiter.checkRegister(servletRequest, request);
         RegisterResponse response = authService.register(request);
         return ResponseEntity.created(URI.create("/api/users/" + response.id())).body(response);
     }
 
     @PostMapping("/verify-email/resend")
     public EmailVerificationDispatchResponse resendEmailVerification(
-            @Valid @RequestBody ResendEmailVerificationRequest request
+            @Valid @RequestBody ResendEmailVerificationRequest request,
+            HttpServletRequest servletRequest
     ) {
+        authRateLimiter.checkResendVerification(servletRequest, request);
         return authService.resendEmailVerification(request);
     }
 
@@ -52,7 +61,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    public LoginResponse login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        authRateLimiter.checkLogin(servletRequest, request);
         return authService.login(request);
     }
 
