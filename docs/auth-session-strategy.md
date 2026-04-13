@@ -29,8 +29,16 @@ Para mobile y web se usa:
 - Si refresh falla, limpia la sesion local.
 - Logout revoca el refresh token en backend y limpia la sesion local.
 
+## Mobile token storage
+
+Los builds nativos usan secure storage desde frontend:
+
+- iOS Keychain
+- Android Keystore-backed encrypted storage
+
+Web mantiene `localStorage` como fallback de navegador.
+
 ## Pendiente posterior
 
-- Mover almacenamiento mobile a secure storage nativo cuando se cierre packaging final.
 - Agregar administracion de sesiones/dispositivos si el producto lo necesita.
 - Definir politica de expiracion/revocacion mas estricta si se requiere por compliance.
