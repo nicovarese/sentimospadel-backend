@@ -16,6 +16,14 @@ spring:
     default-schema: public
 
 app:
+  media:
+    player-profile-photos:
+      storage-path: ./target/test-player-profile-photos
+      public-base-url: http://localhost:8081/api/player-profile-photos
+      max-size-bytes: 5242880
+  tournament-invitations:
+    base-url: http://localhost:3000
+    expiration: 14d
   security:
     jwt:
       secret: test-jwt-secret-test-jwt-secret-test-jwt-secret

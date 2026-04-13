@@ -2,10 +2,13 @@ package com.sentimospadel.backend.match.controller;
 
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
+import com.sentimospadel.backend.match.dto.MatchInviteLinkResponse;
+import com.sentimospadel.backend.match.dto.MatchInvitePreviewResponse;
 import com.sentimospadel.backend.match.dto.MatchResultResponse;
 import com.sentimospadel.backend.match.dto.MatchResponse;
 import com.sentimospadel.backend.match.dto.RejectMatchResultRequest;
 import com.sentimospadel.backend.match.dto.SubmitMatchResultRequest;
+import com.sentimospadel.backend.match.service.MatchInviteService;
 import com.sentimospadel.backend.match.service.MatchService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -16,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MatchController {
 
     private final MatchService matchService;
+    private final MatchInviteService matchInviteService;
 
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
@@ -39,6 +44,11 @@ public class MatchController {
     @PostMapping("/{id}/join")
     public MatchResponse joinMatch(Authentication authentication, @PathVariable Long id) {
         return matchService.joinMatch(authentication.getName(), id);
+    }
+
+    @PostMapping("/{id}/invite-link")
+    public MatchInviteLinkResponse createInviteLink(Authentication authentication, @PathVariable Long id) {
+        return matchInviteService.createInviteLink(authentication.getName(), id);
     }
 
     @PostMapping("/{id}/leave")
@@ -96,6 +106,11 @@ public class MatchController {
     @GetMapping("/{id}")
     public MatchResponse getMatchById(@PathVariable Long id) {
         return matchService.getMatchById(id);
+    }
+
+    @GetMapping("/invite")
+    public MatchInvitePreviewResponse resolveInvite(@RequestParam String token) {
+        return matchInviteService.resolveInvite(token);
     }
 
     @GetMapping("/{id}/result")

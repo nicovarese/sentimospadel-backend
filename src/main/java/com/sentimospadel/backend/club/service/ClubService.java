@@ -3,6 +3,7 @@ package com.sentimospadel.backend.club.service;
 import com.sentimospadel.backend.club.dto.ClubResponse;
 import com.sentimospadel.backend.club.dto.CreateClubRequest;
 import com.sentimospadel.backend.club.entity.Club;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.repository.ClubRepository;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
 import java.util.List;
@@ -24,6 +25,9 @@ public class ClubService {
                 .address(trimToNull(request.address()))
                 .description(trimToNull(request.description()))
                 .integrated(request.integrated())
+                .bookingMode(request.bookingMode() == null
+                        ? (request.integrated() ? ClubBookingMode.DIRECT : ClubBookingMode.UNAVAILABLE)
+                        : request.bookingMode())
                 .build();
 
         return toResponse(clubRepository.save(club));
@@ -53,6 +57,7 @@ public class ClubService {
                 club.getAddress(),
                 club.getDescription(),
                 club.isIntegrated(),
+                effectiveBookingMode(club),
                 club.getCreatedAt(),
                 club.getUpdatedAt()
         );
@@ -65,5 +70,13 @@ public class ClubService {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private ClubBookingMode effectiveBookingMode(Club club) {
+        if (club.getBookingMode() != null) {
+            return club.getBookingMode();
+        }
+
+        return club.isIntegrated() ? ClubBookingMode.DIRECT : ClubBookingMode.UNAVAILABLE;
     }
 }

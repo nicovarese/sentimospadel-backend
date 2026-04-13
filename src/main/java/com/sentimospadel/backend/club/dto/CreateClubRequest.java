@@ -1,6 +1,8 @@
 package com.sentimospadel.backend.club.dto;
 
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateClubRequest(
@@ -14,6 +16,8 @@ public record CreateClubRequest(
         String address,
         @Size(max = 1000, message = "Club description must be at most 1000 characters")
         String description,
-        boolean integrated
+        boolean integrated,
+        @NotNull(message = "Club booking mode is required")
+        ClubBookingMode bookingMode
 ) {
 }

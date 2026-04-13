@@ -21,14 +21,19 @@ import com.sentimospadel.backend.club.entity.ClubAgendaSlotOverride;
 import com.sentimospadel.backend.club.entity.ClubCourt;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotActionType;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotStatus;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.enums.ClubQuickActionType;
 import com.sentimospadel.backend.club.repository.ClubActivityLogRepository;
 import com.sentimospadel.backend.club.repository.ClubAgendaSlotOverrideRepository;
 import com.sentimospadel.backend.club.repository.ClubCourtRepository;
 import com.sentimospadel.backend.match.entity.Match;
+import com.sentimospadel.backend.match.entity.MatchParticipant;
+import com.sentimospadel.backend.match.enums.MatchParticipantTeam;
 import com.sentimospadel.backend.match.enums.MatchStatus;
 import com.sentimospadel.backend.match.repository.MatchParticipantRepository;
 import com.sentimospadel.backend.match.repository.MatchRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
+import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.enums.UserRole;
 import com.sentimospadel.backend.user.enums.UserStatus;
@@ -69,6 +74,9 @@ class ClubManagementServiceTest {
     @Mock
     private MatchParticipantRepository matchParticipantRepository;
 
+    @Mock
+    private PlayerEventNotificationService playerEventNotificationService;
+
     private ClubManagementService clubManagementService;
 
     @BeforeEach
@@ -79,7 +87,8 @@ class ClubManagementServiceTest {
                 clubAgendaSlotOverrideRepository,
                 clubActivityLogRepository,
                 matchRepository,
-                matchParticipantRepository
+                matchParticipantRepository,
+                playerEventNotificationService
         );
     }
 
@@ -101,22 +110,9 @@ class ClubManagementServiceTest {
 
     @Test
     void getAgendaReturnsBackendDrivenSlotsForManagedClub() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt court = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1 (Cristal)")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1 (Cristal)", true, 1, "1200");
         ClubAgendaSlotOverride override = ClubAgendaSlotOverride.builder()
                 .id(20L)
                 .club(club)
@@ -130,11 +126,7 @@ class ClubManagementServiceTest {
         when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
         when(clubCourtRepository.findAllByClubIdAndActiveTrueOrderByDisplayOrderAsc(1L)).thenReturn(List.of(court));
         when(clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(1L, LocalDate.of(2026, 3, 26))).thenReturn(List.of(override));
-        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(
-                org.mockito.ArgumentMatchers.eq(1L),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any()
-        )).thenReturn(List.of());
+        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(eq(1L), any(), any())).thenReturn(List.of());
 
         ClubManagementAgendaResponse response = clubManagementService.getAgenda(
                 "club.admin@sentimospadel.test",
@@ -143,41 +135,56 @@ class ClubManagementServiceTest {
 
         assertThat(response.clubName()).isEqualTo("Top Padel");
         assertThat(response.courts()).hasSize(1);
-        assertThat(response.courts().get(0).slots())
+        assertThat(response.courts().getFirst().slots())
                 .extracting(slot -> slot.time() + ":" + slot.status())
                 .contains("19:00:RESERVED");
-        assertThat(response.courts().get(0).slots())
+        assertThat(response.courts().getFirst().slots())
                 .filteredOn(slot -> slot.time().equals("19:00"))
                 .extracting(slot -> slot.reservedByName())
                 .containsExactly("Reserva Premium");
     }
 
     @Test
+    void getAgendaMapsPendingClubConfirmationsIntoAgendaSlots() {
+        Club club = buildClub(1L, "World Padel", ClubBookingMode.CONFIRMATION_REQUIRED);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1", true, 1, "1250");
+        PlayerProfile creator = buildPlayerProfile(90L, "Jugador QA");
+        Match pendingMatch = Match.builder()
+                .id(30L)
+                .createdBy(creator)
+                .status(MatchStatus.PENDING_CLUB_CONFIRMATION)
+                .scheduledAt(Instant.parse("2026-03-26T22:00:00Z"))
+                .club(club)
+                .locationText("World Padel - Cancha 1")
+                .maxPlayers(4)
+                .build();
+
+        when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
+        when(clubCourtRepository.findAllByClubIdAndActiveTrueOrderByDisplayOrderAsc(1L)).thenReturn(List.of(court));
+        when(clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(1L, LocalDate.of(2026, 3, 26))).thenReturn(List.of());
+        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(eq(1L), any(), any())).thenReturn(List.of(pendingMatch));
+        when(matchParticipantRepository.findAllByMatchIdInOrderByJoinedAtAsc(List.of(30L)))
+                .thenReturn(List.of(buildParticipant(pendingMatch, creator, null, Instant.parse("2026-03-17T10:00:00Z"))));
+
+        ClubManagementAgendaResponse response = clubManagementService.getAgenda("club.admin@sentimospadel.test", LocalDate.of(2026, 3, 26));
+
+        assertThat(response.courts().getFirst().slots())
+                .filteredOn(slot -> slot.time().equals("19:00"))
+                .singleElement()
+                .satisfies(slot -> {
+                    assertThat(slot.status()).isEqualTo(ClubAgendaSlotStatus.PENDING_CONFIRMATION);
+                    assertThat(slot.matchId()).isEqualTo(30L);
+                    assertThat(slot.reservedByName()).isEqualTo("Jugador QA");
+                });
+    }
+
+    @Test
     void getCourtsReturnsActiveAndInactiveCourtsOrdered() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt activeCourt = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
-        ClubCourt inactiveCourt = ClubCourt.builder()
-                .id(8L)
-                .club(club)
-                .name("Cancha 2")
-                .displayOrder(2)
-                .hourlyRateUyu(BigDecimal.valueOf(1100))
-                .active(false)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt activeCourt = buildCourt(7L, club, "Cancha 1", true, 1, "1200");
+        ClubCourt inactiveCourt = buildCourt(8L, club, "Cancha 2", false, 2, "1100");
 
         when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
         when(clubCourtRepository.findAllByClubIdOrderByDisplayOrderAscIdAsc(1L)).thenReturn(List.of(activeCourt, inactiveCourt));
@@ -192,30 +199,10 @@ class ClubManagementServiceTest {
 
     @Test
     void createCourtAppendsNewCourtAtTheEndOfTheOrder() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt existingCourt = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
-        ClubCourt createdCourt = ClubCourt.builder()
-                .id(8L)
-                .club(club)
-                .name("Cancha 2")
-                .displayOrder(2)
-                .hourlyRateUyu(BigDecimal.valueOf(1150))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt existingCourt = buildCourt(7L, club, "Cancha 1", true, 1, "1200");
+        ClubCourt createdCourt = buildCourt(8L, club, "Cancha 2", true, 2, "1150");
 
         when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
         when(clubCourtRepository.findAllByClubIdOrderByDisplayOrderAscIdAsc(1L))
@@ -238,22 +225,9 @@ class ClubManagementServiceTest {
 
     @Test
     void updateCourtRejectsDeactivationWhenFutureOverridesExist() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt court = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1", true, 1, "1200");
         ClubAgendaSlotOverride futureOverride = ClubAgendaSlotOverride.builder()
                 .id(20L)
                 .club(club)
@@ -280,22 +254,9 @@ class ClubManagementServiceTest {
 
     @Test
     void updateCourtRejectsRenameWhenFutureRealMatchesExist() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt court = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1 (Cristal)")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1 (Cristal)", true, 1, "1200");
         Match futureMatch = Match.builder()
                 .id(30L)
                 .status(MatchStatus.OPEN)
@@ -321,30 +282,10 @@ class ClubManagementServiceTest {
 
     @Test
     void reorderCourtsUpdatesDisplayOrder() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt courtOne = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
-        ClubCourt courtTwo = ClubCourt.builder()
-                .id(8L)
-                .club(club)
-                .name("Cancha 2")
-                .displayOrder(2)
-                .hourlyRateUyu(BigDecimal.valueOf(1150))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt courtOne = buildCourt(7L, club, "Cancha 1", true, 1, "1200");
+        ClubCourt courtTwo = buildCourt(8L, club, "Cancha 2", true, 2, "1150");
 
         when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
         when(clubCourtRepository.findAllByClubIdOrderByDisplayOrderAscIdAsc(1L))
@@ -364,22 +305,9 @@ class ClubManagementServiceTest {
 
     @Test
     void applyAgendaSlotActionFreesManualReservationsAndRegistersActivity() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
-                .build();
-        ClubCourt court = ClubCourt.builder()
-                .id(7L)
-                .club(club)
-                .name("Cancha 1 (Cristal)")
-                .displayOrder(1)
-                .hourlyRateUyu(BigDecimal.valueOf(1200))
-                .active(true)
-                .build();
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1 (Cristal)", true, 1, "1200");
         ClubAgendaSlotOverride override = ClubAgendaSlotOverride.builder()
                 .id(20L)
                 .club(club)
@@ -398,11 +326,7 @@ class ClubManagementServiceTest {
                 LocalDate.of(2026, 3, 26),
                 LocalTime.of(19, 0)
         )).thenReturn(Optional.of(override));
-        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(
-                org.mockito.ArgumentMatchers.eq(1L),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any()
-        )).thenReturn(List.of());
+        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(eq(1L), any(), any())).thenReturn(List.of());
         when(clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(1L, LocalDate.of(2026, 3, 26))).thenReturn(List.of());
 
         ClubManagementAgendaResponse response = clubManagementService.applyAgendaSlotAction(
@@ -417,23 +341,89 @@ class ClubManagementServiceTest {
         );
 
         verify(clubAgendaSlotOverrideRepository).delete(override);
-        verify(clubAgendaSlotOverrideRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        assertThat(response.courts().get(0).slots())
+        verify(clubAgendaSlotOverrideRepository, never()).save(any());
+        assertThat(response.courts().getFirst().slots())
                 .filteredOn(slot -> slot.time().equals("19:00"))
                 .extracting(slot -> slot.status())
                 .containsExactly(ClubAgendaSlotStatus.AVAILABLE);
     }
 
     @Test
-    void executeQuickActionReturnsMessage() {
-        Club club = Club.builder().id(1L).name("Top Padel").city("Montevideo").build();
-        User adminUser = User.builder()
-                .id(1L)
-                .email("club.admin@sentimospadel.test")
-                .role(UserRole.ADMIN)
-                .status(UserStatus.ACTIVE)
-                .managedClub(club)
+    void approvePendingBookingPromotesPendingMatchAndRefreshesAgenda() {
+        Club club = buildClub(1L, "World Padel", ClubBookingMode.CONFIRMATION_REQUIRED);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1", true, 1, "1250");
+        PlayerProfile creator = buildPlayerProfile(90L, "Jugador QA");
+        Match pendingMatch = Match.builder()
+                .id(30L)
+                .createdBy(creator)
+                .status(MatchStatus.PENDING_CLUB_CONFIRMATION)
+                .scheduledAt(Instant.parse("2026-03-26T22:00:00Z"))
+                .club(club)
+                .locationText("World Padel - Cancha 1")
+                .maxPlayers(4)
                 .build();
+        List<MatchParticipant> participants = List.of(
+                buildParticipant(pendingMatch, creator, null, Instant.parse("2026-03-17T10:00:00Z"))
+        );
+
+        when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
+        when(matchRepository.findById(30L)).thenReturn(Optional.of(pendingMatch));
+        when(matchParticipantRepository.findAllByMatchIdInOrderByJoinedAtAsc(List.of(30L))).thenReturn(participants);
+        when(clubCourtRepository.findAllByClubIdAndActiveTrueOrderByDisplayOrderAsc(1L)).thenReturn(List.of(court));
+        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(eq(1L), any(), any())).thenReturn(List.of(pendingMatch));
+        when(clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(1L, LocalDate.of(2026, 3, 26))).thenReturn(List.of());
+
+        ClubManagementAgendaResponse response = clubManagementService.approvePendingBooking("club.admin@sentimospadel.test", 30L);
+
+        assertThat(pendingMatch.getStatus()).isEqualTo(MatchStatus.OPEN);
+        assertThat(response.courts().getFirst().slots())
+                .filteredOn(slot -> slot.time().equals("19:00"))
+                .extracting(slot -> slot.status())
+                .containsExactly(ClubAgendaSlotStatus.RESERVED);
+        verify(playerEventNotificationService).notifyClubBookingApproved(pendingMatch, participants);
+    }
+
+    @Test
+    void rejectPendingBookingCancelsMatchAndRefreshesAgenda() {
+        Club club = buildClub(1L, "World Padel", ClubBookingMode.CONFIRMATION_REQUIRED);
+        User adminUser = buildAdmin(club);
+        ClubCourt court = buildCourt(7L, club, "Cancha 1", true, 1, "1250");
+        PlayerProfile creator = buildPlayerProfile(90L, "Jugador QA");
+        Match pendingMatch = Match.builder()
+                .id(30L)
+                .createdBy(creator)
+                .status(MatchStatus.PENDING_CLUB_CONFIRMATION)
+                .scheduledAt(Instant.parse("2026-03-26T22:00:00Z"))
+                .club(club)
+                .locationText("World Padel - Cancha 1")
+                .maxPlayers(4)
+                .build();
+        List<MatchParticipant> participants = List.of(
+                buildParticipant(pendingMatch, creator, null, Instant.parse("2026-03-17T10:00:00Z"))
+        );
+
+        when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
+        when(matchRepository.findById(30L)).thenReturn(Optional.of(pendingMatch));
+        when(matchParticipantRepository.findAllByMatchIdInOrderByJoinedAtAsc(List.of(30L))).thenReturn(participants);
+        when(clubCourtRepository.findAllByClubIdAndActiveTrueOrderByDisplayOrderAsc(1L)).thenReturn(List.of(court));
+        when(matchRepository.findAllByClubIdAndScheduledAtBetweenOrderByScheduledAtAsc(eq(1L), any(), any())).thenReturn(List.of(pendingMatch));
+        when(clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(1L, LocalDate.of(2026, 3, 26))).thenReturn(List.of());
+
+        ClubManagementAgendaResponse response = clubManagementService.rejectPendingBooking("club.admin@sentimospadel.test", 30L);
+
+        assertThat(pendingMatch.getStatus()).isEqualTo(MatchStatus.CANCELLED);
+        assertThat(response.courts().getFirst().slots())
+                .filteredOn(slot -> slot.time().equals("19:00"))
+                .extracting(slot -> slot.status())
+                .containsExactly(ClubAgendaSlotStatus.AVAILABLE);
+        verify(playerEventNotificationService).notifyClubBookingRejected(pendingMatch, participants);
+    }
+
+    @Test
+    void executeQuickActionReturnsMessage() {
+        Club club = buildClub(1L, "Top Padel", ClubBookingMode.DIRECT);
+        User adminUser = buildAdmin(club);
 
         when(userRepository.findByEmail("club.admin@sentimospadel.test")).thenReturn(Optional.of(adminUser));
 
@@ -444,6 +434,61 @@ class ClubManagementServiceTest {
                 ).message()
         ).isEqualTo("Registro operativo guardado: aviso a usuarios");
     }
+
+    private User buildAdmin(Club club) {
+        return User.builder()
+                .id(1L)
+                .email("club.admin@sentimospadel.test")
+                .role(UserRole.ADMIN)
+                .status(UserStatus.ACTIVE)
+                .managedClub(club)
+                .build();
+    }
+
+    private Club buildClub(Long id, String name, ClubBookingMode bookingMode) {
+        return Club.builder()
+                .id(id)
+                .name(name)
+                .city("Montevideo")
+                .integrated(true)
+                .bookingMode(bookingMode)
+                .build();
+    }
+
+    private ClubCourt buildCourt(Long id, Club club, String name, boolean active, int displayOrder, String hourlyRateUyu) {
+        return ClubCourt.builder()
+                .id(id)
+                .club(club)
+                .name(name)
+                .displayOrder(displayOrder)
+                .hourlyRateUyu(new BigDecimal(hourlyRateUyu))
+                .active(active)
+                .build();
+    }
+
+    private PlayerProfile buildPlayerProfile(Long id, String fullName) {
+        PlayerProfile playerProfile = PlayerProfile.builder()
+                .fullName(fullName)
+                .currentRating(BigDecimal.valueOf(4.2))
+                .provisional(true)
+                .matchesPlayed(0)
+                .ratedMatchesCount(0)
+                .build();
+        com.sentimospadel.backend.user.entity.User user = com.sentimospadel.backend.user.entity.User.builder()
+                .id(id + 1000)
+                .email(fullName.toLowerCase().replace(' ', '.') + "@example.com")
+                .build();
+        playerProfile.setUser(user);
+        org.springframework.test.util.ReflectionTestUtils.setField(playerProfile, "id", id);
+        return playerProfile;
+    }
+
+    private MatchParticipant buildParticipant(Match match, PlayerProfile playerProfile, MatchParticipantTeam team, Instant joinedAt) {
+        return MatchParticipant.builder()
+                .match(match)
+                .playerProfile(playerProfile)
+                .team(team)
+                .joinedAt(joinedAt)
+                .build();
+    }
 }
-
-

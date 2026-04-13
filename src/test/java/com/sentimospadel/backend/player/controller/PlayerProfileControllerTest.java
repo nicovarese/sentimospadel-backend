@@ -3,7 +3,9 @@ package com.sentimospadel.backend.player.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -33,6 +35,7 @@ import com.sentimospadel.backend.player.service.PlayerInsightService;
 import com.sentimospadel.backend.player.service.PlayerProfileService;
 import com.sentimospadel.backend.rating.dto.RatingHistoryEntryResponse;
 import com.sentimospadel.backend.rating.dto.RatingHistoryMatchSummaryResponse;
+import com.sentimospadel.backend.rating.dto.RatingHistorySourceType;
 import com.sentimospadel.backend.rating.service.PlayerRatingHistoryService;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
 import com.sentimospadel.backend.verification.dto.PlayerClubVerificationRequestResponse;
@@ -57,6 +60,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.mock.web.MockMultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class PlayerProfileControllerTest {
@@ -99,6 +103,28 @@ class PlayerProfileControllerTest {
     @Test
     void myProfileRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/players/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateMyProfileRequiresAuthentication() throws Exception {
+        mockMvc.perform(put("/api/players/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Jugador Uno",
+                                  "preferredSide": "LEFT",
+                                  "declaredLevel": "Intermedio",
+                                  "city": "Montevideo"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void uploadMyPhotoRequiresAuthentication() throws Exception {
+        mockMvc.perform(multipart("/api/players/me/photo")
+                        .file(new MockMultipartFile("file", "avatar.jpg", MediaType.IMAGE_JPEG_VALUE, "fake".getBytes())))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -150,6 +176,8 @@ class PlayerProfileControllerTest {
                 new RatingHistoryEntryResponse(
                         100L,
                         20L,
+                        null,
+                        RatingHistorySourceType.SOCIAL_MATCH,
                         new BigDecimal("4.80"),
                         new BigDecimal("0.06"),
                         new BigDecimal("4.86"),
@@ -160,7 +188,8 @@ class PlayerProfileControllerTest {
                                 Instant.parse("2026-03-17T17:00:00Z"),
                                 MatchWinnerTeam.TEAM_ONE,
                                 new MatchScoreResponse(2, 1)
-                        )
+                        ),
+                        null
                 )
         ));
 
@@ -178,10 +207,13 @@ class PlayerProfileControllerTest {
                 new RatingHistoryEntryResponse(
                         101L,
                         21L,
+                        null,
+                        RatingHistorySourceType.SOCIAL_MATCH,
                         new BigDecimal("4.86"),
                         new BigDecimal("-0.04"),
                         new BigDecimal("4.82"),
                         Instant.parse("2026-03-18T18:00:00Z"),
+                        null,
                         null
                 )
         ));
@@ -204,6 +236,8 @@ class PlayerProfileControllerTest {
                         null,
                         null,
                         "Montevideo",
+                        20L,
+                        "Top Padel",
                         null,
                         new BigDecimal("4.82"),
                         UruguayCategory.TERCERA,
@@ -228,6 +262,115 @@ class PlayerProfileControllerTest {
                 .andExpect(jsonPath("$.fullName").value("Player One"))
                 .andExpect(jsonPath("$.currentRating").value(4.82))
                 .andExpect(jsonPath("$.currentCategory").value("TERCERA"));
+    }
+
+    @Test
+    void updateMyProfileReturnsUpdatedProfile() throws Exception {
+        when(playerProfileService.updateMyPlayerProfile(
+                org.mockito.ArgumentMatchers.eq("player@example.com"),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(
+                new PlayerProfileResponse(
+                        10L,
+                        100L,
+                        "Jugador Editado",
+                        "https://cdn.example.com/photo.jpg",
+                        com.sentimospadel.backend.player.enums.PreferredSide.RIGHT,
+                        "Avanzado",
+                        "Montevideo",
+                        20L,
+                        "Top Padel",
+                        "Bio actualizada",
+                        new BigDecimal("4.82"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        12,
+                        7,
+                        true,
+                        Instant.parse("2026-03-17T10:00:00Z"),
+                        new BigDecimal("4.60"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        ClubVerificationStatus.NOT_REQUIRED,
+                        Instant.parse("2026-03-16T10:00:00Z"),
+                        Instant.parse("2026-03-18T10:00:00Z")
+                )
+        );
+
+        mockMvc.perform(put("/api/players/me")
+                        .principal(new TestingAuthenticationToken("player@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Jugador Editado",
+                                  "photoUrl": "https://cdn.example.com/photo.jpg",
+                                  "preferredSide": "RIGHT",
+                                  "declaredLevel": "Avanzado",
+                                  "city": "Montevideo",
+                                  "representedClubId": 20,
+                                  "bio": "Bio actualizada"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Jugador Editado"))
+                .andExpect(jsonPath("$.preferredSide").value("RIGHT"))
+                .andExpect(jsonPath("$.representedClubName").value("Top Padel"));
+    }
+
+    @Test
+    void updateMyProfileValidatesRequiredFields() throws Exception {
+        mockMvc.perform(put("/api/players/me")
+                        .principal(new TestingAuthenticationToken("player@example.com", null))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "",
+                                  "preferredSide": null,
+                                  "declaredLevel": "",
+                                  "city": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void uploadMyPhotoReturnsUpdatedProfile() throws Exception {
+        when(playerProfileService.updateMyPlayerPhoto(
+                org.mockito.ArgumentMatchers.eq("player@example.com"),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(
+                new PlayerProfileResponse(
+                        10L,
+                        100L,
+                        "Jugador Editado",
+                        "http://localhost:8081/api/player-profile-photos/player-10-avatar.jpg",
+                        com.sentimospadel.backend.player.enums.PreferredSide.RIGHT,
+                        "Avanzado",
+                        "Montevideo",
+                        20L,
+                        "Top Padel",
+                        "Bio actualizada",
+                        new BigDecimal("4.82"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        12,
+                        7,
+                        true,
+                        Instant.parse("2026-03-17T10:00:00Z"),
+                        new BigDecimal("4.60"),
+                        UruguayCategory.TERCERA,
+                        false,
+                        ClubVerificationStatus.NOT_REQUIRED,
+                        Instant.parse("2026-03-16T10:00:00Z"),
+                        Instant.parse("2026-03-18T10:00:00Z")
+                )
+        );
+
+        mockMvc.perform(multipart("/api/players/me/photo")
+                        .file(new MockMultipartFile("file", "avatar.jpg", MediaType.IMAGE_JPEG_VALUE, "fake-image".getBytes()))
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoUrl").value("http://localhost:8081/api/player-profile-photos/player-10-avatar.jpg"));
     }
 
     @Test

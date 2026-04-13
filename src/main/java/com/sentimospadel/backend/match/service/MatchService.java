@@ -1,6 +1,8 @@
 package com.sentimospadel.backend.match.service;
 
 import com.sentimospadel.backend.club.entity.Club;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
+import com.sentimospadel.backend.club.service.ClubBookingResolution;
 import com.sentimospadel.backend.club.service.ClubBookingService;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
@@ -22,8 +24,10 @@ import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
 import com.sentimospadel.backend.match.repository.MatchParticipantRepository;
 import com.sentimospadel.backend.match.repository.MatchResultRepository;
 import com.sentimospadel.backend.match.repository.MatchRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
+import com.sentimospadel.backend.player.support.UruguayCategoryMapper;
 import com.sentimospadel.backend.rating.service.RatingApplicationService;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.ConflictException;
@@ -51,15 +55,19 @@ public class MatchService {
     private final ClubBookingService clubBookingService;
     private final PlayerProfileResolverService playerProfileResolverService;
     private final RatingApplicationService ratingApplicationService;
+    private final PlayerEventNotificationService playerEventNotificationService;
 
     @Transactional
     public MatchResponse createMatch(String email, CreateMatchRequest request) {
         PlayerProfile playerProfile = playerProfileResolverService.getOrCreateByUserEmail(email);
-        Club club = clubBookingService.resolveClubBooking(request.clubId(), request.scheduledAt(), request.locationText());
+        ClubBookingResolution bookingResolution = request.clubId() == null
+                ? new ClubBookingResolution(null, null)
+                : clubBookingService.resolveClubBooking(request.clubId(), request.scheduledAt(), request.locationText());
+        Club club = bookingResolution.club();
 
         Match match = Match.builder()
                 .createdBy(playerProfile)
-                .status(MatchStatus.OPEN)
+                .status(initialStatusForBooking(bookingResolution.bookingMode()))
                 .scheduledAt(request.scheduledAt())
                 .club(club)
                 .locationText(trimToNull(request.locationText()))
@@ -83,6 +91,7 @@ public class MatchService {
         PlayerProfile playerProfile = playerProfileResolverService.getOrCreateByUserEmail(email);
 
         if (match.getStatus() == MatchStatus.CANCELLED
+                || match.getStatus() == MatchStatus.PENDING_CLUB_CONFIRMATION
                 || match.getStatus() == MatchStatus.RESULT_PENDING
                 || match.getStatus() == MatchStatus.COMPLETED) {
             throw new ConflictException("This match cannot be joined in its current state");
@@ -107,6 +116,7 @@ public class MatchService {
         if (updatedCount >= match.getMaxPlayers()) {
             match.setStatus(MatchStatus.FULL);
             matchRepository.save(match);
+            playerEventNotificationService.notifyMatchFull(match, getParticipants(matchId));
         }
 
         return toResponse(match);
@@ -128,7 +138,9 @@ public class MatchService {
 
         long participantCount = matchParticipantRepository.countByMatchId(matchId);
         if (match.getStatus() != MatchStatus.CANCELLED) {
-            match.setStatus(participantCount >= match.getMaxPlayers() ? MatchStatus.FULL : MatchStatus.OPEN);
+            if (match.getStatus() != MatchStatus.PENDING_CLUB_CONFIRMATION) {
+                match.setStatus(participantCount >= match.getMaxPlayers() ? MatchStatus.FULL : MatchStatus.OPEN);
+            }
             matchRepository.save(match);
         }
 
@@ -145,6 +157,7 @@ public class MatchService {
         }
 
         if (match.getStatus() == MatchStatus.CANCELLED
+                || match.getStatus() == MatchStatus.PENDING_CLUB_CONFIRMATION
                 || match.getStatus() == MatchStatus.RESULT_PENDING
                 || match.getStatus() == MatchStatus.COMPLETED) {
             throw new ConflictException("Teams cannot be assigned in the current match state");
@@ -180,8 +193,11 @@ public class MatchService {
             return toResponse(match);
         }
 
+        List<MatchParticipant> participants = getParticipants(matchId);
         match.setStatus(MatchStatus.CANCELLED);
-        return toResponse(matchRepository.save(match));
+        MatchResponse response = toResponse(matchRepository.save(match));
+        playerEventNotificationService.notifyMatchCancelled(match, participants);
+        return response;
     }
 
     @Transactional
@@ -279,6 +295,7 @@ public class MatchService {
         match.setStatus(MatchStatus.COMPLETED);
         matchRepository.save(match);
         ratingApplicationService.applyConfirmedResultIfNeeded(matchId);
+        playerEventNotificationService.notifyMatchResultConfirmed(match, participants);
 
         return toResultResponse(savedResult);
     }
@@ -326,6 +343,7 @@ public class MatchService {
 
         match.setStatus(MatchStatus.FULL);
         matchRepository.save(match);
+        playerEventNotificationService.notifyMatchResultRejected(match, participants, savedResult.getRejectionReason(), savedResult.getRejectedAt());
 
         return toResultResponse(savedResult);
     }
@@ -364,6 +382,11 @@ public class MatchService {
                         participant.getPlayerProfile().getId(),
                         participant.getPlayerProfile().getUser().getId(),
                         participant.getPlayerProfile().getFullName(),
+                        participant.getPlayerProfile().getCurrentRating(),
+                        UruguayCategoryMapper.fromRating(participant.getPlayerProfile().getCurrentRating()),
+                        participant.getPlayerProfile().getMatchesPlayed(),
+                        participant.getPlayerProfile().isRequiresClubVerification(),
+                        participant.getPlayerProfile().getClubVerificationStatus(),
                         participant.getTeam(),
                         participant.getJoinedAt()
                 ))
@@ -524,5 +547,13 @@ public class MatchService {
 
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private MatchStatus initialStatusForBooking(ClubBookingMode bookingMode) {
+        if (bookingMode == ClubBookingMode.CONFIRMATION_REQUIRED) {
+            return MatchStatus.PENDING_CLUB_CONFIRMATION;
+        }
+
+        return MatchStatus.OPEN;
     }
 }

@@ -89,6 +89,12 @@ public class User extends BaseEntity {
     @Column(name = "operational_notifications_updated_at")
     private Instant operationalNotificationsUpdatedAt;
 
+    @Column(name = "account_deletion_requested_at")
+    private Instant accountDeletionRequestedAt;
+
+    @Column(name = "account_deletion_reason", length = 1000)
+    private String accountDeletionReason;
+
     @ManyToOne
     @JoinColumn(name = "managed_club_id")
     private Club managedClub;

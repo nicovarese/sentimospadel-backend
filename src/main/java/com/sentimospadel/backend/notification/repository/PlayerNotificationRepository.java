@@ -9,7 +9,11 @@ public interface PlayerNotificationRepository extends JpaRepository<PlayerNotifi
 
     List<PlayerNotification> findAllByPlayerProfileIdOrderByCreatedAtDesc(Long playerProfileId);
 
+    List<PlayerNotification> findAllByPlayerProfileIdAndManagedBySyncTrueOrderByCreatedAtDesc(Long playerProfileId);
+
     List<PlayerNotification> findAllByPlayerProfileIdAndActiveTrueOrderByCreatedAtDesc(Long playerProfileId);
+
+    Optional<PlayerNotification> findByPlayerProfileIdAndActionKey(Long playerProfileId, String actionKey);
 
     Optional<PlayerNotification> findByIdAndPlayerProfileId(Long id, Long playerProfileId);
 }

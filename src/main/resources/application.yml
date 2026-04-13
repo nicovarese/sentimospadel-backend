@@ -1,6 +1,10 @@
 spring:
   application:
     name: backend
+  servlet:
+    multipart:
+      max-file-size: ${PLAYER_PROFILE_PHOTO_MAX_FILE_SIZE:5MB}
+      max-request-size: ${PLAYER_PROFILE_PHOTO_MAX_REQUEST_SIZE:5MB}
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
@@ -27,7 +31,7 @@ spring:
         format_sql: true
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/seed
     default-schema: public
     validate-on-migrate: true
 
@@ -56,6 +60,26 @@ app:
       login-url: ${EMAIL_VERIFICATION_LOGIN_URL:http://localhost:3000}
       expiration: ${EMAIL_VERIFICATION_EXPIRATION:24h}
       subject: ${EMAIL_VERIFICATION_SUBJECT:Confirma tu email en Sentimos Padel}
+  notifications:
+    push:
+      enabled: ${PUSH_NOTIFICATIONS_ENABLED:true}
+      log-payloads: ${PUSH_NOTIFICATIONS_LOG_PAYLOADS:true}
+      provider: ${PUSH_NOTIFICATIONS_PROVIDER:log-only}
+      fcm-project-id: ${FCM_PROJECT_ID:}
+      fcm-service-account-json-base64: ${FCM_SERVICE_ACCOUNT_JSON_BASE64:}
+      fcm-access-token-uri: ${FCM_ACCESS_TOKEN_URI:https://oauth2.googleapis.com/token}
+      fcm-endpoint: ${FCM_ENDPOINT:https://fcm.googleapis.com/v1/projects/%s/messages:send}
+  match-invitations:
+    base-url: ${MATCH_INVITATION_BASE_URL:http://localhost:3000}
+    expiration: ${MATCH_INVITATION_EXPIRATION:14d}
+  tournament-invitations:
+    base-url: ${TOURNAMENT_INVITATION_BASE_URL:http://localhost:3000}
+    expiration: ${TOURNAMENT_INVITATION_EXPIRATION:14d}
+  media:
+    player-profile-photos:
+      storage-path: ${PLAYER_PROFILE_PHOTO_STORAGE_PATH:./var/player-profile-photos}
+      public-base-url: ${PLAYER_PROFILE_PHOTO_PUBLIC_BASE_URL:http://localhost:8081/api/player-profile-photos}
+      max-size-bytes: ${PLAYER_PROFILE_PHOTO_MAX_SIZE_BYTES:5242880}
   security:
     jwt:
       secret: ${JWT_SECRET:change-this-local-jwt-secret-change-this-local-jwt-secret}

@@ -2,6 +2,9 @@ package com.sentimospadel.backend.tournament.controller;
 
 import com.sentimospadel.backend.tournament.dto.CreateTournamentRequest;
 import com.sentimospadel.backend.tournament.dto.LaunchTournamentRequest;
+import com.sentimospadel.backend.tournament.dto.TournamentInviteLinkResponse;
+import com.sentimospadel.backend.tournament.dto.TournamentInvitePreviewResponse;
+import com.sentimospadel.backend.tournament.dto.TournamentLaunchPreviewResponse;
 import com.sentimospadel.backend.tournament.dto.RejectTournamentMatchResultRequest;
 import com.sentimospadel.backend.tournament.dto.SubmitTournamentMatchResultRequest;
 import com.sentimospadel.backend.tournament.dto.SyncTournamentEntriesRequest;
@@ -9,6 +12,9 @@ import com.sentimospadel.backend.tournament.dto.TournamentMatchResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResultResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentStandingsResponse;
+import com.sentimospadel.backend.tournament.dto.UpsertMyTournamentEntryRequest;
+import com.sentimospadel.backend.tournament.dto.UpdateTournamentEntryTeamNameRequest;
+import com.sentimospadel.backend.tournament.service.TournamentInviteService;
 import com.sentimospadel.backend.tournament.service.TournamentMatchService;
 import com.sentimospadel.backend.tournament.service.TournamentService;
 import com.sentimospadel.backend.tournament.service.TournamentStandingsService;
@@ -25,6 +31,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/tournaments")
@@ -32,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TournamentController {
 
     private final TournamentService tournamentService;
+    private final TournamentInviteService tournamentInviteService;
     private final TournamentMatchService tournamentMatchService;
     private final TournamentStandingsService tournamentStandingsService;
 
@@ -45,8 +53,12 @@ public class TournamentController {
     }
 
     @PostMapping("/{id}/join")
-    public TournamentResponse joinTournament(Authentication authentication, @PathVariable Long id) {
-        return tournamentService.joinTournament(authentication.getName(), id);
+    public TournamentResponse joinTournament(
+            Authentication authentication,
+            @PathVariable Long id,
+            @RequestBody(required = false) UpsertMyTournamentEntryRequest request
+    ) {
+        return tournamentService.joinTournament(authentication.getName(), id, request);
     }
 
     @PostMapping("/{id}/leave")
@@ -63,6 +75,15 @@ public class TournamentController {
         return tournamentService.syncEntries(authentication.getName(), id, request);
     }
 
+    @PutMapping("/{id}/entries/me")
+    public TournamentResponse updateMyEntry(
+            Authentication authentication,
+            @PathVariable Long id,
+            @Valid @RequestBody UpsertMyTournamentEntryRequest request
+    ) {
+        return tournamentService.updateMyEntry(authentication.getName(), id, request);
+    }
+
     @PostMapping("/{id}/launch")
     public TournamentResponse launchTournament(
             Authentication authentication,
@@ -70,6 +91,29 @@ public class TournamentController {
             @Valid @RequestBody LaunchTournamentRequest request
     ) {
         return tournamentService.launchTournament(authentication.getName(), id, request);
+    }
+
+    @PostMapping("/{id}/launch-preview")
+    public TournamentLaunchPreviewResponse previewTournamentLaunch(
+            Authentication authentication,
+            @PathVariable Long id,
+            @Valid @RequestBody LaunchTournamentRequest request
+    ) {
+        return tournamentService.previewLaunchTournament(authentication.getName(), id, request);
+    }
+
+    @PostMapping("/{id}/invite-link")
+    public TournamentInviteLinkResponse createInviteLink(Authentication authentication, @PathVariable Long id) {
+        return tournamentInviteService.createInviteLink(authentication.getName(), id);
+    }
+
+    @PutMapping("/{id}/entries/me/team-name")
+    public TournamentResponse updateMyEntryTeamName(
+            Authentication authentication,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTournamentEntryTeamNameRequest request
+    ) {
+        return tournamentService.updateMyEntryTeamName(authentication.getName(), id, request);
     }
 
     @PostMapping("/{id}/archive")
@@ -125,5 +169,10 @@ public class TournamentController {
     @GetMapping("/{id}/standings")
     public TournamentStandingsResponse getStandings(@PathVariable Long id) {
         return tournamentStandingsService.getStandings(id);
+    }
+
+    @GetMapping("/invite")
+    public TournamentInvitePreviewResponse resolveInvite(@RequestParam String token) {
+        return tournamentInviteService.resolveInvite(token);
     }
 }

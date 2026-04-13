@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
+import com.sentimospadel.backend.match.dto.MatchInviteLinkResponse;
+import com.sentimospadel.backend.match.dto.MatchInvitePreviewResponse;
 import com.sentimospadel.backend.match.dto.MatchParticipantResponse;
 import com.sentimospadel.backend.match.dto.MatchResultResponse;
 import com.sentimospadel.backend.match.dto.MatchResultSummaryResponse;
@@ -22,6 +24,7 @@ import com.sentimospadel.backend.match.enums.MatchParticipantTeam;
 import com.sentimospadel.backend.match.enums.MatchResultStatus;
 import com.sentimospadel.backend.match.enums.MatchStatus;
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
+import com.sentimospadel.backend.match.service.MatchInviteService;
 import com.sentimospadel.backend.match.service.MatchService;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
 import jakarta.servlet.FilterChain;
@@ -50,9 +53,12 @@ class MatchControllerTest {
     @Mock
     private MatchService matchService;
 
+    @Mock
+    private MatchInviteService matchInviteService;
+
     @BeforeEach
     void setUp() {
-        MatchController controller = new MatchController(matchService);
+        MatchController controller = new MatchController(matchService, matchInviteService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addFilters(new AuthenticationRequiredFilter())
@@ -119,6 +125,57 @@ class MatchControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].participants[0].fullName").value("Player One"))
                 .andExpect(jsonPath("$[0].participants[0].team").value("TEAM_ONE"));
+    }
+
+    @Test
+    void createInviteLinkRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/matches/1/invite-link"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createInviteLinkReturnsOfficialShareLink() throws Exception {
+        when(matchInviteService.createInviteLink("player@example.com", 1L)).thenReturn(
+                new MatchInviteLinkResponse(
+                        1L,
+                        "token-123",
+                        "http://localhost:3000?matchInvite=token-123",
+                        Instant.parse("2026-04-21T20:00:00Z")
+                )
+        );
+
+        mockMvc.perform(post("/api/matches/1/invite-link")
+                        .principal(new TestingAuthenticationToken("player@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchId").value(1))
+                .andExpect(jsonPath("$.inviteToken").value("token-123"))
+                .andExpect(jsonPath("$.inviteUrl").value("http://localhost:3000?matchInvite=token-123"));
+    }
+
+    @Test
+    void resolveInviteIsPublic() throws Exception {
+        when(matchInviteService.resolveInvite("token-123")).thenReturn(
+                new MatchInvitePreviewResponse(
+                        1L,
+                        MatchStatus.OPEN,
+                        Instant.parse("2026-04-14T20:00:00Z"),
+                        7L,
+                        "Top Padel",
+                        "Cancha 1",
+                        "Top Padel - Cancha 1",
+                        "Player One",
+                        2,
+                        4,
+                        Instant.parse("2026-04-21T20:00:00Z")
+                )
+        );
+
+        mockMvc.perform(get("/api/matches/invite?token=token-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchId").value(1))
+                .andExpect(jsonPath("$.clubName").value("Top Padel"))
+                .andExpect(jsonPath("$.courtName").value("Cancha 1"))
+                .andExpect(jsonPath("$.currentPlayerCount").value(2));
     }
 
     @Test

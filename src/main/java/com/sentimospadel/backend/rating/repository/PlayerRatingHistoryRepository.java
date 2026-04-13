@@ -9,6 +9,21 @@ public interface PlayerRatingHistoryRepository extends JpaRepository<PlayerRatin
 
     long countByMatchId(Long matchId);
 
-    @EntityGraph(attributePaths = {"match"})
+    long countByTournamentMatchId(Long tournamentMatchId);
+
+    @EntityGraph(attributePaths = {
+            "match",
+            "tournamentMatch",
+            "tournamentMatch.tournament",
+            "tournamentMatch.teamOneEntry",
+            "tournamentMatch.teamOneEntry.primaryPlayerProfile",
+            "tournamentMatch.teamOneEntry.secondaryPlayerProfile",
+            "tournamentMatch.teamTwoEntry",
+            "tournamentMatch.teamTwoEntry.primaryPlayerProfile",
+            "tournamentMatch.teamTwoEntry.secondaryPlayerProfile"
+    })
     List<PlayerRatingHistory> findAllByPlayerProfileIdOrderByCreatedAtDesc(Long playerProfileId);
+
+    @EntityGraph(attributePaths = {"match"})
+    List<PlayerRatingHistory> findAllByPlayerProfileIdAndMatchIsNotNullOrderByCreatedAtDesc(Long playerProfileId);
 }

@@ -24,6 +24,7 @@ import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.repository.ClubRepository;
 import com.sentimospadel.backend.legal.service.LegalDocumentService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.player.enums.PreferredSide;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.DuplicateResourceException;
@@ -90,6 +91,11 @@ class AuthServiceTest {
 
     @Test
     void registerHashesPasswordPersistsPhoneAndKeepsUserPendingVerification() {
+        Club representedClub = Club.builder()
+                .name("Top Padel")
+                .city("Montevideo")
+                .integrated(true)
+                .build();
         RegisterRequest request = new RegisterRequest(
                 " Player Uno ",
                 " Player@Example.com ",
@@ -99,6 +105,11 @@ class AuthServiceTest {
                 null,
                 null,
                 null,
+                " https://cdn.example.com/player-uno.jpg ",
+                PreferredSide.LEFT,
+                "4.0",
+                " Montevideo ",
+                7L,
                 true,
                 "2026-04-07.1",
                 true,
@@ -110,6 +121,7 @@ class AuthServiceTest {
 
         when(userRepository.existsByEmail("player@example.com")).thenReturn(false);
         when(userRepository.existsByPhone("091234567")).thenReturn(false);
+        when(clubRepository.findById(7L)).thenReturn(java.util.Optional.of(representedClub));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
             user.setCreatedAt(Instant.parse("2026-03-13T12:00:00Z"));
@@ -131,13 +143,21 @@ class AuthServiceTest {
         assertEquals(UserStatus.PENDING_EMAIL_VERIFICATION, savedUser.getStatus());
         assertTrue(savedUser.getEmailVerificationTokenHash() != null && !savedUser.getEmailVerificationTokenHash().isBlank());
         assertEquals("player@example.com", response.email());
-        verify(playerProfileRepository).save(any(PlayerProfile.class));
+        ArgumentCaptor<PlayerProfile> profileCaptor = ArgumentCaptor.forClass(PlayerProfile.class);
+        verify(playerProfileRepository).save(profileCaptor.capture());
+        PlayerProfile savedProfile = profileCaptor.getValue();
+        assertEquals("Player Uno", savedProfile.getFullName());
+        assertEquals("https://cdn.example.com/player-uno.jpg", savedProfile.getPhotoUrl());
+        assertEquals(PreferredSide.LEFT, savedProfile.getPreferredSide());
+        assertEquals("4.0", savedProfile.getDeclaredLevel());
+        assertEquals("Montevideo", savedProfile.getCity());
+        assertEquals("Top Padel", savedProfile.getRepresentedClub().getName());
         verify(emailVerificationNotificationService).sendVerificationEmail(eq("player@example.com"), eq("Player Uno"), any());
     }
 
     @Test
     void registerRejectsDuplicateEmail() {
-        RegisterRequest request = new RegisterRequest("Player", "player@example.com", "091234567", "secret123", RegisterAccountType.PLAYER, null, null, null, true, "2026-04-07.1", true, "2026-04-07.1", false, false, "2026-04-07.1");
+        RegisterRequest request = new RegisterRequest("Player", "player@example.com", "091234567", "secret123", RegisterAccountType.PLAYER, null, null, null, null, PreferredSide.RIGHT, "3.5", "Montevideo", null, true, "2026-04-07.1", true, "2026-04-07.1", false, false, "2026-04-07.1");
 
         when(userRepository.existsByEmail("player@example.com")).thenReturn(true);
 
@@ -146,7 +166,7 @@ class AuthServiceTest {
 
     @Test
     void registerRejectsDuplicatePhone() {
-        RegisterRequest request = new RegisterRequest("Player", "player@example.com", "091 234 567", "secret123", RegisterAccountType.PLAYER, null, null, null, true, "2026-04-07.1", true, "2026-04-07.1", false, false, "2026-04-07.1");
+        RegisterRequest request = new RegisterRequest("Player", "player@example.com", "091 234 567", "secret123", RegisterAccountType.PLAYER, null, null, null, null, PreferredSide.RIGHT, "3.5", "Montevideo", null, true, "2026-04-07.1", true, "2026-04-07.1", false, false, "2026-04-07.1");
 
         when(userRepository.existsByEmail("player@example.com")).thenReturn(false);
         when(userRepository.existsByPhone("091234567")).thenReturn(true);
@@ -192,6 +212,11 @@ class AuthServiceTest {
                 " Club de Prueba ",
                 " Montevideo ",
                 " Rivera 1234 ",
+                null,
+                null,
+                null,
+                null,
+                null,
                 true,
                 "2026-04-07.1",
                 true,
@@ -310,6 +335,11 @@ class AuthServiceTest {
                 RegisterAccountType.PLAYER,
                 null,
                 null,
+                null,
+                null,
+                PreferredSide.BOTH,
+                "4.5",
+                "Montevideo",
                 null,
                 true,
                 "2026-04-07.1",

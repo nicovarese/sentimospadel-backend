@@ -142,7 +142,7 @@ public class PlayerInsightService {
                 .collect(Collectors.toMap(result -> result.getMatch().getId(), Function.identity()));
 
         Map<Long, PlayerRatingHistory> historyByMatchId = playerRatingHistoryRepository
-                .findAllByPlayerProfileIdOrderByCreatedAtDesc(playerProfileId)
+                .findAllByPlayerProfileIdAndMatchIsNotNullOrderByCreatedAtDesc(playerProfileId)
                 .stream()
                 .collect(Collectors.toMap(history -> history.getMatch().getId(), Function.identity(), (left, right) -> left));
 

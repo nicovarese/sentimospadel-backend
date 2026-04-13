@@ -1,6 +1,7 @@
 package com.sentimospadel.backend.tournament.service;
 
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.player.support.UruguayCategoryMapper;
 import com.sentimospadel.backend.tournament.dto.TournamentEntryMemberResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentEntryResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResponse;
@@ -12,6 +13,7 @@ import com.sentimospadel.backend.tournament.entity.Tournament;
 import com.sentimospadel.backend.tournament.entity.TournamentEntry;
 import com.sentimospadel.backend.tournament.entity.TournamentMatch;
 import com.sentimospadel.backend.tournament.entity.TournamentMatchResult;
+import com.sentimospadel.backend.tournament.enums.TournamentFormat;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -39,6 +41,7 @@ public class TournamentMapper {
                 tournament.getDescription(),
                 tournament.getClub() == null ? null : tournament.getClub().getId(),
                 tournament.getCity(),
+                tournament.getCategoryLabels() == null ? List.of() : List.copyOf(tournament.getCategoryLabels()),
                 tournament.getStartDate(),
                 tournament.getEndDate(),
                 tournament.getStatus(),
@@ -58,7 +61,7 @@ public class TournamentMapper {
                 tournament.getCourtNames() == null ? List.of() : List.copyOf(tournament.getCourtNames()),
                 tournament.getLaunchedAt(),
                 tournament.getArchivedAt(),
-                false,
+                affectsPlayerRating(tournament),
                 Math.toIntExact(generatedMatchesCount),
                 entryResponses,
                 tournament.getCreatedAt(),
@@ -126,7 +129,12 @@ public class TournamentMapper {
         return new TournamentEntryMemberResponse(
                 playerProfile.getId(),
                 playerProfile.getUser().getId(),
-                playerProfile.getFullName()
+                playerProfile.getFullName(),
+                playerProfile.getCurrentRating(),
+                UruguayCategoryMapper.fromRating(playerProfile.getCurrentRating()),
+                playerProfile.getMatchesPlayed(),
+                playerProfile.isRequiresClubVerification(),
+                playerProfile.getClubVerificationStatus()
         );
     }
 
@@ -180,5 +188,9 @@ public class TournamentMapper {
             return;
         }
         sets.add(new TournamentMatchScoreSetResponse(teamOneGames, teamTwoGames));
+    }
+
+    private boolean affectsPlayerRating(Tournament tournament) {
+        return tournament.getFormat() == TournamentFormat.ELIMINATION && tournament.isCompetitive();
     }
 }

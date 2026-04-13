@@ -30,6 +30,7 @@ import com.sentimospadel.backend.match.entity.MatchParticipant;
 import com.sentimospadel.backend.match.enums.MatchStatus;
 import com.sentimospadel.backend.match.repository.MatchParticipantRepository;
 import com.sentimospadel.backend.match.repository.MatchRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.shared.exception.ConflictException;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
 import com.sentimospadel.backend.user.entity.User;
@@ -79,6 +80,7 @@ public class ClubManagementService {
     private final ClubActivityLogRepository clubActivityLogRepository;
     private final MatchRepository matchRepository;
     private final MatchParticipantRepository matchParticipantRepository;
+    private final PlayerEventNotificationService playerEventNotificationService;
 
     @Transactional(readOnly = true)
     public ClubManagementDashboardResponse getDashboard(String authenticatedEmail) {
@@ -384,6 +386,41 @@ public class ClubManagementService {
         return new ClubQuickActionResponse(message);
     }
 
+    @Transactional
+    public ClubManagementAgendaResponse approvePendingBooking(String authenticatedEmail, Long matchId) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        Match match = resolveManagedClubMatch(managedClub, matchId);
+
+        if (match.getStatus() != MatchStatus.PENDING_CLUB_CONFIRMATION) {
+            throw new ConflictException("Only pending booking requests can be approved");
+        }
+
+        List<MatchParticipant> participants = loadParticipants(List.of(match));
+        long participantCount = participants.size();
+        match.setStatus(participantCount >= match.getMaxPlayers() ? MatchStatus.FULL : MatchStatus.OPEN);
+        matchRepository.save(match);
+        registerActivity(managedClub, "Reserva aprobada", buildBookingActivityDescription(match, participants));
+        playerEventNotificationService.notifyClubBookingApproved(match, participants);
+        return buildAgenda(managedClub, getManagedActiveCourts(managedClub.getId()), toLocalDate(match.getScheduledAt()));
+    }
+
+    @Transactional
+    public ClubManagementAgendaResponse rejectPendingBooking(String authenticatedEmail, Long matchId) {
+        Club managedClub = resolveManagedClub(authenticatedEmail);
+        Match match = resolveManagedClubMatch(managedClub, matchId);
+
+        if (match.getStatus() != MatchStatus.PENDING_CLUB_CONFIRMATION) {
+            throw new ConflictException("Only pending booking requests can be rejected");
+        }
+
+        List<MatchParticipant> participants = loadParticipants(List.of(match));
+        match.setStatus(MatchStatus.CANCELLED);
+        matchRepository.save(match);
+        registerActivity(managedClub, "Reserva rechazada", buildBookingActivityDescription(match, participants));
+        playerEventNotificationService.notifyClubBookingRejected(match, participants);
+        return buildAgenda(managedClub, getManagedActiveCourts(managedClub.getId()), toLocalDate(match.getScheduledAt()));
+    }
+
     private ClubManagementAgendaResponse buildAgenda(Club managedClub, List<ClubCourt> courts, LocalDate date) {
         List<ClubAgendaSlotOverride> overrides = clubAgendaSlotOverrideRepository.findAllByClubIdAndSlotDate(managedClub.getId(), date);
         Instant rangeStart = date.atStartOfDay(CLUB_ZONE).toInstant();
@@ -445,7 +482,7 @@ public class ClubManagementService {
 
             occupancyBySlot.put(
                     new SlotKey(maybeCourt.get().getId(), localDate, localTime),
-                    new SlotOccupancy(ClubAgendaSlotStatus.RESERVED, reservedByName, true)
+                    new SlotOccupancy(toAgendaStatus(match.getStatus()), reservedByName, true, match.getId())
             );
         }
 
@@ -455,7 +492,8 @@ public class ClubManagementService {
                     new SlotOccupancy(
                             override.getStatus(),
                             override.getReservedByName(),
-                            false
+                            false,
+                            null
                     )
             );
         }
@@ -474,6 +512,7 @@ public class ClubManagementService {
                     buildSlotId(court.getId(), date, slotTime),
                     slotTime.toString(),
                     ClubAgendaSlotStatus.AVAILABLE,
+                    null,
                     null
             );
         }
@@ -482,7 +521,8 @@ public class ClubManagementService {
                 buildSlotId(court.getId(), date, slotTime),
                 slotTime.toString(),
                 occupancy.status(),
-                occupancy.reservedByName()
+                occupancy.reservedByName(),
+                occupancy.matchId()
         );
     }
 
@@ -514,6 +554,17 @@ public class ClubManagementService {
                 .map(entry -> courtById.get(entry.getKey().courtId()).getHourlyRateUyu().multiply(SLOT_DURATION_HOURS))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Match resolveManagedClubMatch(Club managedClub, Long matchId) {
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Match with id " + matchId + " was not found"));
+
+        if (match.getClub() == null || !managedClub.getId().equals(match.getClub().getId())) {
+            throw new ResourceNotFoundException("Match with id " + matchId + " was not found for this club");
+        }
+
+        return match;
     }
 
     private Club resolveManagedClub(String authenticatedEmail) {
@@ -637,6 +688,19 @@ public class ClubManagementService {
         };
     }
 
+    private String buildBookingActivityDescription(Match match, List<MatchParticipant> participants) {
+        String playerName = participants.isEmpty()
+                ? match.getCreatedBy().getFullName()
+                : participants.get(0).getPlayerProfile().getFullName();
+        return socialLocationLabel(match) + " • " + playerName;
+    }
+
+    private ClubAgendaSlotStatus toAgendaStatus(MatchStatus matchStatus) {
+        return matchStatus == MatchStatus.PENDING_CLUB_CONFIRMATION
+                ? ClubAgendaSlotStatus.PENDING_CONFIRMATION
+                : ClubAgendaSlotStatus.RESERVED;
+    }
+
     private LocalDate toLocalDate(Instant instant) {
         return ZonedDateTime.ofInstant(instant, CLUB_ZONE).toLocalDate();
     }
@@ -692,6 +756,16 @@ public class ClubManagementService {
         return scaleCurrency(value).toPlainString();
     }
 
+    private String socialLocationLabel(Match match) {
+        if (match.getLocationText() != null && !match.getLocationText().isBlank()) {
+            return match.getLocationText().trim();
+        }
+        if (match.getClub() != null && match.getClub().getName() != null && !match.getClub().getName().isBlank()) {
+            return match.getClub().getName().trim();
+        }
+        return "Reserva club";
+    }
+
     private BigDecimal divideOrZero(BigDecimal dividend, int divisor, int scale) {
         if (divisor <= 0) {
             return BigDecimal.ZERO.setScale(scale, RoundingMode.HALF_UP);
@@ -720,7 +794,8 @@ public class ClubManagementService {
     private record SlotOccupancy(
             ClubAgendaSlotStatus status,
             String reservedByName,
-            boolean derivedFromRealMatch
+            boolean derivedFromRealMatch,
+            Long matchId
     ) {
     }
 

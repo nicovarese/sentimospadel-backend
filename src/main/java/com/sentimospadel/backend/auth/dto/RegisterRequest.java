@@ -1,9 +1,11 @@
 package com.sentimospadel.backend.auth.dto;
 
 import com.sentimospadel.backend.auth.enums.RegisterAccountType;
+import com.sentimospadel.backend.player.enums.PreferredSide;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
@@ -27,6 +29,15 @@ public record RegisterRequest(
         String clubCity,
         @Size(max = 255, message = "Club address must be at most 255 characters")
         String clubAddress,
+        @Size(max = 500, message = "Photo URL must be at most 500 characters")
+        String photoUrl,
+        PreferredSide preferredSide,
+        @Size(max = 50, message = "Declared level must be at most 50 characters")
+        String declaredLevel,
+        @Size(max = 120, message = "City must be at most 120 characters")
+        String city,
+        @Positive(message = "Represented club id must be positive")
+        Long representedClubId,
         boolean acceptTerms,
         @Size(max = 40, message = "Accepted terms version must be at most 40 characters")
         String acceptedTermsVersion,

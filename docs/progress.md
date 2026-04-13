@@ -557,22 +557,103 @@
 - Tournament archive is now backend-driven:
   - `POST /api/tournaments/{id}/archive`
   - tournament reads now expose `archived` and `archivedAt`
+- Tournament launch preview is now backend-driven:
+  - `POST /api/tournaments/{id}/launch-preview`
+  - frontend launch modal now consumes backend preview data for groups, fixture, and official playoff placeholders
+  - launch no longer falls back to generating official tournament state in frontend runtime
+- Tournament launch frontend cleanup is now done on the active path:
+  - `LaunchTournamentView` no longer carries the legacy local generator
+  - the launch handler no longer keeps an active local branch for tournament match creation
+  - the visible UX remains the same, but preview + confirm now depend only on backend endpoints
+- In-app notifications now cover core MVP events beyond pending actions:
+  - social match full / cancelled / result confirmed / result rejected
+  - tournament launched / tournament result confirmed / tournament result rejected
+  - club verification approved / rejected
+  - `player_notifications` now separates sync-managed pending actions from persisted domain events
+- External push infrastructure is now backend-driven:
+  - device registration endpoints exist under `/api/notifications/devices/*`
+  - user consent can now be read and updated under `/api/notifications/preferences`
+  - `push_device_installations` persists active installations per authenticated user
+  - `push_notification_deliveries` records each push attempt as `SENT`, `SKIPPED`, or `FAILED`
+  - delivery is gated by `operational_notifications_enabled`
+  - provider is currently `log-only`, ready for future FCM/APNs integration without contract changes
+- Match invite links are now MVP-ready:
+  - `POST /api/matches/{id}/invite-link` generates an official signed share link
+  - `GET /api/matches/invite?token=...` resolves a public preview for logged-out or logged-in users
+  - frontend now consumes `?matchInvite=<token>` on load and joins through backend live match rules
+  - club or player match creation now attempts to surface the official share link immediately after booking
+- Active tournament UX cleanup is now done on the MVP path:
+  - create tournament no longer copies a fake invite link from frontend
+  - competition empty state now references only backend-driven tournaments
+  - the visible `Ver todos` affordance no longer behaves like a dead CTA
+  - larger legacy/mock sections still exist in `App.tsx`, but they are outside the active runtime path and are now tracked as code-health debt
+- Club booking now supports official booking modes:
+  - `DIRECT`
+  - `CONFIRMATION_REQUIRED`
+  - `UNAVAILABLE`
+- Public club booking no longer assumes immediate confirmation for every integrated club:
+  - confirmation-required clubs now create real matches in `PENDING_CLUB_CONFIRMATION`
+  - public and club agendas now expose `PENDING_CONFIRMATION`
+  - club admins can approve or reject pending booking requests from club management
+  - players receive event notifications when the club approves or rejects the request
+  - invite links are blocked until the booking is actually approved
+- Frontend code-health cleanup removed dead legacy sections from `App.tsx`:
+  - removed unused mock datasets for clubs, club rankings, initial matches, initial agenda, and friend invites
+  - removed non-rendered legacy views for club dashboard, legacy clubs booking, and the old national ranking mock
+  - local compatibility branches for non-backend matches/tournaments still remain and are intentionally tracked as separate debt
+- Player profile registration and rendering are now more backend-driven:
+  - player register now captures official profile metadata for `photoUrl`, `preferredSide`, `declaredLevel`, `city`, and optional `representedClubId`
+  - `player_profiles` now persists an official optional represented club via FK to `clubs`
+  - `GET /api/players/me` and `GET /api/players/{id}` now expose represented club fields
+  - authenticated player hydration now uses backend profile data for avatar and profile metadata instead of mock defaults
+  - player profile UI now shows official position, declared level, city, and represented club
+  - public profile modal now fetches the official backend profile when a backend player profile id is available
+- Player profile editing is now backend-driven:
+  - `PUT /api/players/me` updates official player profile fields
+  - edit flow covers `fullName`, `photoUrl`, `preferredSide`, `declaredLevel`, `city`, optional `representedClubId`, and `bio`
+  - frontend profile screen now exposes an edit action and refreshes the authenticated user from backend after save
+- Player profile photo upload is now real:
+  - `POST /api/players/me/photo` accepts multipart upload for avatar images
+  - supported formats are `JPG`, `PNG`, and `WEBP`
+  - managed photos are now served from backend under `/api/player-profile-photos/{filename}`
+  - replacing or removing a managed photo now cleans the previous managed file when applicable
+  - frontend edit profile keeps the same flow but now uploads binary media instead of relying only on manual URL state
+- Elimination launch is now stricter and aligned to backend bracket rules:
+  - only `1`, `2`, `4`, or `8` groups are supported
+  - each group must have at least `2` confirmed teams before launch
+- Competitive elimination tournaments now apply official player rating on confirmed results:
+  - backend persists `rating_applied` / `rating_applied_at` for `tournament_match_results`
+  - `player_rating_history` now supports rows coming from social matches or tournament matches
+  - `ELIMINATION + competitive=true` updates official rating
+  - `ELIMINATION + competitive=false` remains recreational and does not update official rating
+  - profile rating history now returns tournament-backed rating entries too
+- Capacitor mobile packaging is now started:
+  - frontend now includes Capacitor dependencies and `capacitor.config.ts`
+  - Android native project has been generated under `frontend/android`
+  - iOS native project has been generated under `frontend/ios`
+  - package scripts now cover `cap:add:*`, `cap:sync:*`, and `cap:open:*`
+  - a native URL bridge keeps existing invite-link flows compatible with `appUrlOpen`
+  - frontend now documents `VITE_API_BASE_URL` explicitly for mobile-safe builds
+  - backend CORS now accepts Capacitor origins (`http://localhost`, `https://localhost`, `capacitor://localhost`, `ionic://localhost`)
+  - native custom-scheme handling is now prepared through `sentimospadel://app`
+  - iOS now includes the minimum QA-ready permissions/config for profile photo upload and local HTTP webview testing
+- Release/docs hardening is now started too:
+  - repo now includes a mobile packaging guide for Android/iOS
+  - repo now includes a recommended `main / staging / develop` environment strategy
+  - repo now includes a local CEO setup and demo guide
 - Automated validation status after these slices:
-  - backend: `146` tests green
+  - backend: `193` tests green
   - frontend: `npm run lint` green
   - frontend: `npm run build` green
 
 ### Pending Next Steps
-- Remove remaining local tournament UI states:
-  - launch preview
-  - leftover legacy branches in frontend
 - Decide whether public club booking needs:
   - real invitation workflow
   - player search/contacts
   - payment/billing
   or whether those stay out of MVP
-- Expand in-app notifications coverage across the existing real flows
-- Add push delivery after the notification event model is complete
+- Decide whether pending actions should move from lazy inbox sync to proactive event generation for true real-time external push coverage
+- Decide when to package mobile with Capacitor/native wrappers so Android/iOS can register real tokens
 - Add optional filter/query support on player-facing match history if product starts needing tabs like upcoming/completed/cancelled
 - Extend persistence-backed integration tests around rating-history reads and match lifecycle edge cases
 

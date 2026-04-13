@@ -9,6 +9,7 @@ import com.sentimospadel.backend.club.dto.ClubBookingAgendaResponse;
 import com.sentimospadel.backend.club.dto.ClubBookingCourtResponse;
 import com.sentimospadel.backend.club.dto.ClubBookingSlotResponse;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotStatus;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.service.ClubBookingService;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
 import java.math.BigDecimal;
@@ -44,6 +45,7 @@ class ClubBookingControllerTest {
                 new ClubBookingAgendaResponse(
                         7L,
                         "Top Padel",
+                        ClubBookingMode.DIRECT,
                         LocalDate.parse("2026-04-07"),
                         List.of(
                                 new ClubBookingCourtResponse(

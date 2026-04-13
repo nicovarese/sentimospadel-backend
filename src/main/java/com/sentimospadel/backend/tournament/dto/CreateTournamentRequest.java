@@ -16,6 +16,7 @@ public record CreateTournamentRequest(
         String description,
         Long clubId,
         String city,
+        @Size(max = 7) List<String> categoryLabels,
         @NotNull LocalDate startDate,
         LocalDate endDate,
         @NotNull TournamentFormat format,

@@ -11,10 +11,12 @@ import com.sentimospadel.backend.auth.dto.RegisterResponse;
 import com.sentimospadel.backend.auth.dto.ResendEmailVerificationRequest;
 import com.sentimospadel.backend.auth.enums.RegisterAccountType;
 import com.sentimospadel.backend.club.entity.Club;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.repository.ClubRepository;
 import com.sentimospadel.backend.legal.service.LegalDocumentService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
+import com.sentimospadel.backend.player.enums.PreferredSide;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.DuplicateResourceException;
@@ -214,6 +216,7 @@ public class AuthService {
                     .city(requireNonBlank(request.clubCity(), "Club city is required"))
                     .address(trimToNull(request.clubAddress()))
                     .integrated(true)
+                    .bookingMode(ClubBookingMode.DIRECT)
                     .build());
 
             return User.builder()
@@ -275,6 +278,11 @@ public class AuthService {
         playerProfileRepository.save(PlayerProfile.builder()
                 .user(user)
                 .fullName(requireNonBlank(request.fullName(), "Full name is required"))
+                .photoUrl(trimToNull(request.photoUrl()))
+                .preferredSide(requirePreferredSide(request.preferredSide()))
+                .declaredLevel(requireNonBlank(request.declaredLevel(), "Declared level is required"))
+                .city(requireNonBlank(request.city(), "City is required"))
+                .representedClub(resolveRepresentedClub(request.representedClubId()))
                 .currentRating(BigDecimal.valueOf(1.00).setScale(2))
                 .provisional(true)
                 .matchesPlayed(0)
@@ -283,6 +291,23 @@ public class AuthService {
                 .requiresClubVerification(false)
                 .clubVerificationStatus(ClubVerificationStatus.NOT_REQUIRED)
                 .build());
+    }
+
+    private PreferredSide requirePreferredSide(PreferredSide preferredSide) {
+        if (preferredSide == null) {
+            throw new BadRequestException("Preferred side is required");
+        }
+
+        return preferredSide;
+    }
+
+    private Club resolveRepresentedClub(Long representedClubId) {
+        if (representedClubId == null) {
+            return null;
+        }
+
+        return clubRepository.findById(representedClubId)
+                .orElseThrow(() -> new ResourceNotFoundException("Club with id " + representedClubId + " was not found"));
     }
 
     private RegisterResponse toResponse(User user) {

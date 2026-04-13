@@ -213,7 +213,8 @@ class ClubManagementControllerTest {
                                         "10|2026-03-26|19:00",
                                         "19:00",
                                         ClubAgendaSlotStatus.RESERVED,
-                                        "Reserva Premium"
+                                        "Reserva Premium",
+                                        null
                                 ))
                         ))
                 ));
@@ -249,6 +250,28 @@ class ClubManagementControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.clubName").value("Top Padel"));
+    }
+
+    @Test
+    void approvePendingBookingReturnsUpdatedAgenda() throws Exception {
+        when(clubManagementService.approvePendingBooking("club.admin@sentimospadel.test", 30L))
+                .thenReturn(new ClubManagementAgendaResponse(1L, "World Padel", LocalDate.of(2026, 3, 26), List.of()));
+
+        mockMvc.perform(post("/api/clubs/me/management/booking-requests/30/approve")
+                        .principal(authentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clubName").value("World Padel"));
+    }
+
+    @Test
+    void rejectPendingBookingReturnsUpdatedAgenda() throws Exception {
+        when(clubManagementService.rejectPendingBooking("club.admin@sentimospadel.test", 30L))
+                .thenReturn(new ClubManagementAgendaResponse(1L, "World Padel", LocalDate.of(2026, 3, 26), List.of()));
+
+        mockMvc.perform(post("/api/clubs/me/management/booking-requests/30/reject")
+                        .principal(authentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clubName").value("World Padel"));
     }
 
     @Test

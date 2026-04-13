@@ -14,6 +14,8 @@ public record PlayerProfileResponse(
         PreferredSide preferredSide,
         String declaredLevel,
         String city,
+        Long representedClubId,
+        String representedClubName,
         String bio,
         BigDecimal currentRating,
         UruguayCategory currentCategory,

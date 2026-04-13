@@ -89,4 +89,10 @@ public class TournamentMatchResult {
 
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
+
+    @Column(name = "rating_applied", nullable = false)
+    private boolean ratingApplied;
+
+    @Column(name = "rating_applied_at")
+    private Instant ratingAppliedAt;
 }

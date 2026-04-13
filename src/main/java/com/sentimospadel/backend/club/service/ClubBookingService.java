@@ -6,6 +6,7 @@ import com.sentimospadel.backend.club.dto.ClubBookingSlotResponse;
 import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.entity.ClubAgendaSlotOverride;
 import com.sentimospadel.backend.club.entity.ClubCourt;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotStatus;
 import com.sentimospadel.backend.club.repository.ClubAgendaSlotOverrideRepository;
 import com.sentimospadel.backend.club.repository.ClubCourtRepository;
@@ -57,6 +58,7 @@ public class ClubBookingService {
         return new ClubBookingAgendaResponse(
                 club.getId(),
                 club.getName(),
+                effectiveBookingMode(club),
                 date,
                 activeCourts.stream()
                         .map(court -> new ClubBookingCourtResponse(
@@ -78,12 +80,17 @@ public class ClubBookingService {
     }
 
     @Transactional(readOnly = true)
-    public Club resolveClubBooking(Long clubId, Instant scheduledAt, String locationText) {
+    public ClubBookingResolution resolveClubBooking(Long clubId, Instant scheduledAt, String locationText) {
         if (clubId == null) {
-            return null;
+            return new ClubBookingResolution(null, null);
         }
 
         Club club = resolveClub(clubId);
+        ClubBookingMode bookingMode = effectiveBookingMode(club);
+        if (bookingMode == ClubBookingMode.UNAVAILABLE) {
+            throw new ConflictException("This club does not accept app reservations yet");
+        }
+
         List<ClubCourt> activeCourts = getActiveCourts(clubId);
         if (activeCourts.isEmpty()) {
             throw new ConflictException("This club does not have bookable courts configured");
@@ -114,11 +121,15 @@ public class ClubBookingService {
             throw new ConflictException("This club slot is blocked");
         }
 
+        if (slotStatus == ClubAgendaSlotStatus.PENDING_CONFIRMATION) {
+            throw new ConflictException("This club slot already has a pending confirmation request");
+        }
+
         if (slotStatus == ClubAgendaSlotStatus.RESERVED) {
             throw new ConflictException("This club slot is no longer available");
         }
 
-        return club;
+        return new ClubBookingResolution(club, bookingMode);
     }
 
     private Map<SlotKey, ClubAgendaSlotStatus> buildSlotStatuses(Long clubId, List<ClubCourt> activeCourts, LocalDate date) {
@@ -135,7 +146,7 @@ public class ClubBookingService {
             resolveCourtForMatch(match, activeCourts).ifPresent(court -> {
                 LocalTime slotTime = toLocalTime(match.getScheduledAt());
                 if (DEFAULT_SLOT_TIMES.contains(slotTime)) {
-                    statuses.put(new SlotKey(court.getId(), date, slotTime), ClubAgendaSlotStatus.RESERVED);
+                    statuses.put(new SlotKey(court.getId(), date, slotTime), toAgendaStatus(match.getStatus()));
                 }
             });
         }
@@ -184,6 +195,14 @@ public class ClubBookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Club with id " + clubId + " was not found"));
     }
 
+    private ClubBookingMode effectiveBookingMode(Club club) {
+        if (club.getBookingMode() != null) {
+            return club.getBookingMode();
+        }
+
+        return club.isIntegrated() ? ClubBookingMode.DIRECT : ClubBookingMode.UNAVAILABLE;
+    }
+
     private LocalTime toLocalTime(Instant instant) {
         return ZonedDateTime.ofInstant(instant, CLUB_ZONE).toLocalTime().withSecond(0).withNano(0);
     }
@@ -204,6 +223,12 @@ public class ClubBookingService {
         }
 
         return normalizedValue.replaceAll("\\s*\\([^)]*\\)", "").trim();
+    }
+
+    private ClubAgendaSlotStatus toAgendaStatus(MatchStatus matchStatus) {
+        return matchStatus == MatchStatus.PENDING_CLUB_CONFIRMATION
+                ? ClubAgendaSlotStatus.PENDING_CONFIRMATION
+                : ClubAgendaSlotStatus.RESERVED;
     }
 
     private record SlotKey(Long courtId, LocalDate date, LocalTime time) {

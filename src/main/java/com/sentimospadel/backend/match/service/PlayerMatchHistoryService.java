@@ -16,6 +16,7 @@ import com.sentimospadel.backend.match.repository.MatchResultRepository;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
+import com.sentimospadel.backend.player.support.UruguayCategoryMapper;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
@@ -99,6 +100,11 @@ public class PlayerMatchHistoryService {
                         participant.getPlayerProfile().getId(),
                         participant.getPlayerProfile().getUser().getId(),
                         participant.getPlayerProfile().getFullName(),
+                        participant.getPlayerProfile().getCurrentRating(),
+                        UruguayCategoryMapper.fromRating(participant.getPlayerProfile().getCurrentRating()),
+                        participant.getPlayerProfile().getMatchesPlayed(),
+                        participant.getPlayerProfile().isRequiresClubVerification(),
+                        participant.getPlayerProfile().getClubVerificationStatus(),
                         participant.getTeam(),
                         participant.getJoinedAt()
                 ))

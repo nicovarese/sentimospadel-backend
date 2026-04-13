@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sentimospadel.backend.club.dto.ClubResponse;
 import com.sentimospadel.backend.club.dto.CreateClubRequest;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.service.ClubService;
 import com.sentimospadel.backend.shared.exception.GlobalExceptionHandler;
 import java.time.Instant;
@@ -49,6 +50,7 @@ class ClubControllerTest {
                 "Av. Italia 1234",
                 "Indoor padel courts",
                 true,
+                ClubBookingMode.DIRECT,
                 Instant.parse("2026-03-12T12:00:00Z"),
                 Instant.parse("2026-03-12T12:00:00Z")
         );
@@ -60,7 +62,8 @@ class ClubControllerTest {
                 "Montevideo",
                 "Av. Italia 1234",
                 "Indoor padel courts",
-                true
+                true,
+                ClubBookingMode.DIRECT
         );
 
         mockMvc.perform(post("/api/clubs")
@@ -79,7 +82,8 @@ class ClubControllerTest {
                 "",
                 null,
                 null,
-                false
+                false,
+                null
         );
 
         mockMvc.perform(post("/api/clubs")

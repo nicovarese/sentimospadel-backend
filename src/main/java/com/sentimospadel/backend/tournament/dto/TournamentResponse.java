@@ -15,6 +15,7 @@ public record TournamentResponse(
         String description,
         Long clubId,
         String city,
+        List<String> categoryLabels,
         LocalDate startDate,
         LocalDate endDate,
         TournamentStatus status,

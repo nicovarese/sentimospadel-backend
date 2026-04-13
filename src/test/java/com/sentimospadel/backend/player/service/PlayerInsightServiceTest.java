@@ -89,7 +89,7 @@ class PlayerInsightServiceTest {
                         .submittedAt(Instant.parse("2026-03-10T22:00:00Z"))
                         .build()
         ));
-        when(playerRatingHistoryRepository.findAllByPlayerProfileIdOrderByCreatedAtDesc(3L)).thenReturn(List.of(
+        when(playerRatingHistoryRepository.findAllByPlayerProfileIdAndMatchIsNotNullOrderByCreatedAtDesc(3L)).thenReturn(List.of(
                 PlayerRatingHistory.builder()
                         .playerProfile(felipe)
                         .match(match)

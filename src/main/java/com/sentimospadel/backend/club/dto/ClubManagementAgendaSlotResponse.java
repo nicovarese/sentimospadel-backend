@@ -6,6 +6,7 @@ public record ClubManagementAgendaSlotResponse(
         String id,
         String time,
         ClubAgendaSlotStatus status,
-        String reservedByName
+        String reservedByName,
+        Long matchId
 ) {
 }

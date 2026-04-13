@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
+import com.sentimospadel.backend.rating.service.TournamentRatingApplicationService;
 import com.sentimospadel.backend.tournament.dto.TournamentEntryMemberResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchResultResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentMatchScoreSetRequest;
@@ -66,6 +68,12 @@ class TournamentMatchServiceTest {
 
     @Mock
     private TournamentStandingsService tournamentStandingsService;
+
+    @Mock
+    private PlayerEventNotificationService playerEventNotificationService;
+
+    @Mock
+    private TournamentRatingApplicationService tournamentRatingApplicationService;
 
     @InjectMocks
     private TournamentMatchService tournamentMatchService;
@@ -199,6 +207,8 @@ class TournamentMatchServiceTest {
         assertEquals(TournamentMatchResultStatus.CONFIRMED, response.status());
         assertEquals(TournamentMatchStatus.COMPLETED, pendingGroupB.getStatus());
         assertEquals(TournamentStatus.IN_PROGRESS, tournament.getStatus());
+        verify(playerEventNotificationService).notifyTournamentResultConfirmed(pendingGroupB);
+        verify(tournamentRatingApplicationService).applyConfirmedCompetitiveResultIfNeeded(existingResult);
 
         ArgumentCaptor<List<TournamentMatch>> generatedMatchesCaptor = ArgumentCaptor.forClass(List.class);
         verify(tournamentMatchRepository).saveAll(generatedMatchesCaptor.capture());

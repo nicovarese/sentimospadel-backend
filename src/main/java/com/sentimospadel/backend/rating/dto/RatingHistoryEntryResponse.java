@@ -6,10 +6,13 @@ import java.time.Instant;
 public record RatingHistoryEntryResponse(
         Long id,
         Long matchId,
+        Long tournamentMatchId,
+        RatingHistorySourceType sourceType,
         BigDecimal oldRating,
         BigDecimal delta,
         BigDecimal newRating,
         Instant createdAt,
-        RatingHistoryMatchSummaryResponse match
+        RatingHistoryMatchSummaryResponse match,
+        RatingHistoryTournamentMatchSummaryResponse tournamentMatch
 ) {
 }

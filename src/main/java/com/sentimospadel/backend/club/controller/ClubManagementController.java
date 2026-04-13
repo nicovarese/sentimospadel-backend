@@ -101,6 +101,22 @@ public class ClubManagementController {
         return clubManagementService.executeQuickAction(authentication.getName(), request);
     }
 
+    @PostMapping("/booking-requests/{matchId}/approve")
+    public ClubManagementAgendaResponse approvePendingBooking(
+            @PathVariable Long matchId,
+            Authentication authentication
+    ) {
+        return clubManagementService.approvePendingBooking(authentication.getName(), matchId);
+    }
+
+    @PostMapping("/booking-requests/{matchId}/reject")
+    public ClubManagementAgendaResponse rejectPendingBooking(
+            @PathVariable Long matchId,
+            Authentication authentication
+    ) {
+        return clubManagementService.rejectPendingBooking(authentication.getName(), matchId);
+    }
+
     @GetMapping("/verification-requests")
     public List<ClubVerificationManagementRequestResponse> getVerificationRequests(Authentication authentication) {
         return clubVerificationService.getManagedClubRequests(authentication.getName());

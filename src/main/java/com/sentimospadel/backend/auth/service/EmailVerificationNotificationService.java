@@ -1,6 +1,7 @@
 package com.sentimospadel.backend.auth.service;
 
 import com.sentimospadel.backend.auth.config.EmailVerificationProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -17,6 +18,17 @@ public class EmailVerificationNotificationService {
 
     private final EmailVerificationProperties properties;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
+
+    @PostConstruct
+    void validateConfiguration() {
+        if (properties.isLogOnly()) {
+            return;
+        }
+
+        requireNonBlank(properties.getVerificationBaseUrl(), "EMAIL_VERIFICATION_BASE_URL");
+        requireNonBlank(properties.getLoginUrl(), "EMAIL_VERIFICATION_LOGIN_URL");
+        requireNonBlank(properties.getFromAddress(), "EMAIL_VERIFICATION_FROM");
+    }
 
     public void sendVerificationEmail(String email, String displayName, String rawToken) {
         String verificationUrl = UriComponentsBuilder
@@ -57,7 +69,13 @@ public class EmailVerificationNotificationService {
                 Para confirmar tu correo, hace click en este link:
                 %s
 
-                Si vos no creaste esta cuenta, podés ignorar este mensaje.
+                Si vos no creaste esta cuenta, podes ignorar este mensaje.
                 """.formatted(displayName, verificationUrl);
+    }
+
+    private void requireNonBlank(String value, String propertyName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(propertyName + " is required when EMAIL_VERIFICATION_LOG_ONLY=false");
+        }
     }
 }

@@ -68,6 +68,10 @@ public class Tournament extends BaseEntity {
     @Column(name = "city", length = 120)
     private String city;
 
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "category_labels_json", length = 2000)
+    private List<String> categoryLabels;
+
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 

@@ -1,5 +1,6 @@
 package com.sentimospadel.backend.player.entity;
 
+import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.player.enums.PreferredSide;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
@@ -14,6 +15,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -58,6 +60,10 @@ public class PlayerProfile extends BaseEntity {
 
     @Column(name = "city", length = 120)
     private String city;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "represented_club_id")
+    private Club representedClub;
 
     @Column(name = "bio", length = 1000)
     private String bio;

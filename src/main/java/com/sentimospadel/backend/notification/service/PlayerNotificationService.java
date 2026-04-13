@@ -5,6 +5,7 @@ import com.sentimospadel.backend.notification.entity.PlayerNotification;
 import com.sentimospadel.backend.notification.enums.NotificationStatus;
 import com.sentimospadel.backend.notification.repository.PlayerNotificationRepository;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.notification.enums.PendingActionType;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlayerNotificationService {
 
     private final PlayerNotificationRepository playerNotificationRepository;
+    private final PushNotificationDeliveryService pushNotificationDeliveryService;
 
     @Transactional
     public Map<String, PlayerNotification> syncPendingActionNotifications(
@@ -29,7 +31,7 @@ public class PlayerNotificationService {
             List<PendingActionCandidate> candidates
     ) {
         List<PlayerNotification> existingNotifications =
-                playerNotificationRepository.findAllByPlayerProfileIdOrderByCreatedAtDesc(playerProfile.getId());
+                playerNotificationRepository.findAllByPlayerProfileIdAndManagedBySyncTrueOrderByCreatedAtDesc(playerProfile.getId());
 
         Map<String, PlayerNotification> notificationsByActionKey = existingNotifications.stream()
                 .collect(Collectors.toMap(
@@ -44,6 +46,7 @@ public class PlayerNotificationService {
                 .collect(Collectors.toSet());
 
         boolean dirty = false;
+        List<PlayerNotification> notificationsToDispatch = new java.util.ArrayList<>();
 
         for (PlayerNotification notification : existingNotifications) {
             if (notification.isActive() && !desiredActionKeys.contains(notification.getActionKey())) {
@@ -66,10 +69,12 @@ public class PlayerNotificationService {
                         .tournamentId(candidate.tournamentId())
                         .tournamentMatchId(candidate.tournamentMatchId())
                         .active(true)
+                        .managedBySync(true)
                         .build();
                 existingNotifications.add(notification);
                 notificationsByActionKey.put(candidate.actionKey(), notification);
                 dirty = true;
+                notificationsToDispatch.add(notification);
                 continue;
             }
 
@@ -78,6 +83,7 @@ public class PlayerNotificationService {
                 existingNotification.setStatus(NotificationStatus.UNREAD);
                 existingNotification.setReadAt(null);
                 dirty = true;
+                notificationsToDispatch.add(existingNotification);
             }
 
             if (existingNotification.getType() != candidate.type()) {
@@ -110,7 +116,43 @@ public class PlayerNotificationService {
             playerNotificationRepository.saveAllAndFlush(existingNotifications);
         }
 
+        for (PlayerNotification notification : notificationsToDispatch) {
+            pushNotificationDeliveryService.dispatchNotification(notification);
+        }
+
         return notificationsByActionKey;
+    }
+
+    @Transactional
+    public void publishEventNotification(
+            PlayerProfile playerProfile,
+            PendingActionType type,
+            String actionKey,
+            String title,
+            String message,
+            Long matchId,
+            Long tournamentId,
+            Long tournamentMatchId
+    ) {
+        if (playerNotificationRepository.findByPlayerProfileIdAndActionKey(playerProfile.getId(), actionKey).isPresent()) {
+            return;
+        }
+
+        PlayerNotification savedNotification = playerNotificationRepository.saveAndFlush(PlayerNotification.builder()
+                .playerProfile(playerProfile)
+                .type(type)
+                .status(NotificationStatus.UNREAD)
+                .actionKey(actionKey)
+                .title(title)
+                .message(message)
+                .matchId(matchId)
+                .tournamentId(tournamentId)
+                .tournamentMatchId(tournamentMatchId)
+                .active(true)
+                .managedBySync(false)
+                .build());
+
+        pushNotificationDeliveryService.dispatchNotification(savedNotification);
     }
 
     @Transactional(readOnly = true)

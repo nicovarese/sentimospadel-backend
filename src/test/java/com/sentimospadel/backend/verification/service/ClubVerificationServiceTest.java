@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.repository.ClubActivityLogRepository;
 import com.sentimospadel.backend.club.repository.ClubRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
@@ -54,6 +55,9 @@ class ClubVerificationServiceTest {
     @Mock
     private ClubVerificationRequestRepository clubVerificationRequestRepository;
 
+    @Mock
+    private PlayerEventNotificationService playerEventNotificationService;
+
     private ClubVerificationService clubVerificationService;
 
     @BeforeEach
@@ -63,7 +67,8 @@ class ClubVerificationServiceTest {
                 playerProfileRepository,
                 clubRepository,
                 clubActivityLogRepository,
-                clubVerificationRequestRepository
+                clubVerificationRequestRepository,
+                playerEventNotificationService
         );
     }
 
@@ -201,6 +206,7 @@ class ClubVerificationServiceTest {
         assertThat(response.currentCategory()).isEqualTo(UruguayCategory.SEGUNDA);
         assertThat(response.reviewNotes()).isEqualTo("Nivel validado en competencia del club");
         verify(clubActivityLogRepository).save(any());
+        verify(playerEventNotificationService).notifyClubVerificationDecision(pendingRequest);
     }
 
     @Test

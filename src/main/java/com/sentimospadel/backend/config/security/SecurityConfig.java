@@ -1,5 +1,9 @@
 package com.sentimospadel.backend.config.security;
 
+import com.sentimospadel.backend.notification.config.NotificationPushProperties;
+import com.sentimospadel.backend.match.config.MatchInvitationProperties;
+import com.sentimospadel.backend.player.config.PlayerProfilePhotoStorageProperties;
+import com.sentimospadel.backend.tournament.config.TournamentInvitationProperties;
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.repository.UserRepository;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -30,22 +34,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, NotificationPushProperties.class, MatchInvitationProperties.class, TournamentInvitationProperties.class, PlayerProfilePhotoStorageProperties.class})
 public class SecurityConfig {
 
-    private static final List<String> LOCAL_DEV_ORIGINS = List.of(
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3001",
-            "http://localhost:3002",
-            "http://127.0.0.1:3002",
-            "http://localhost:3003",
-            "http://127.0.0.1:3003",
-            "http://localhost:3004",
-            "http://127.0.0.1:3004",
-            "http://localhost:3005",
-            "http://127.0.0.1:3005"
+    private static final List<String> LOCAL_DEV_ORIGIN_PATTERNS = List.of(
+            "http://localhost",
+            "https://localhost",
+            "http://127.0.0.1",
+            "https://127.0.0.1",
+            "http://localhost:*",
+            "https://localhost:*",
+            "http://127.0.0.1:*",
+            "https://127.0.0.1:*",
+            "capacitor://localhost",
+            "ionic://localhost"
     );
 
     @Bean
@@ -62,20 +64,22 @@ public class SecurityConfig {
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/verify-email", "/api/auth/verify-email/resend").permitAll()
-                        .requestMatchers("/api/auth/me", "/api/onboarding/**", "/api/players/me", "/api/players/me/**", "/api/notifications", "/api/notifications/**", "/api/clubs/me/management/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/account/**", "/api/onboarding/**", "/api/players/me", "/api/players/me/**", "/api/notifications", "/api/notifications/**", "/api/clubs/me/management/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/matches", "/api/matches/*/join", "/api/matches/*/leave", "/api/matches/*/cancel", "/api/matches/*/teams", "/api/matches/*/invite-link", "/api/matches/*/result", "/api/matches/*/result/confirm", "/api/matches/*/result/reject").authenticated()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/tournaments",
                                 "/api/tournaments/*/join",
                                 "/api/tournaments/*/leave",
+                                "/api/tournaments/*/launch-preview",
                                 "/api/tournaments/*/launch",
+                                "/api/tournaments/*/invite-link",
                                 "/api/tournaments/*/archive",
                                 "/api/tournaments/*/matches/*/result",
                                 "/api/tournaments/*/matches/*/result/confirm",
                                 "/api/tournaments/*/matches/*/result/reject"
                         ).authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/entries").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/entries", "/api/tournaments/*/entries/me/team-name").authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -92,7 +96,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(LOCAL_DEV_ORIGINS);
+        configuration.setAllowedOriginPatterns(LOCAL_DEV_ORIGIN_PATTERNS);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);

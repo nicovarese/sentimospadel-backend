@@ -3,13 +3,17 @@ package com.sentimospadel.backend.match.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.sentimospadel.backend.club.entity.Club;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
+import com.sentimospadel.backend.club.service.ClubBookingResolution;
 import com.sentimospadel.backend.club.service.ClubBookingService;
 import com.sentimospadel.backend.match.dto.AssignMatchTeamsRequest;
 import com.sentimospadel.backend.match.dto.CreateMatchRequest;
@@ -30,6 +34,7 @@ import com.sentimospadel.backend.match.repository.MatchResultRepository;
 import com.sentimospadel.backend.match.repository.MatchRepository;
 import com.sentimospadel.backend.match.dto.SubmitMatchResultRequest;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
 import com.sentimospadel.backend.rating.service.RatingApplicationService;
 import com.sentimospadel.backend.shared.exception.ConflictException;
@@ -67,6 +72,9 @@ class MatchServiceTest {
     @Mock
     private RatingApplicationService ratingApplicationService;
 
+    @Mock
+    private PlayerEventNotificationService playerEventNotificationService;
+
     private MatchService matchService;
 
     @BeforeEach
@@ -77,7 +85,8 @@ class MatchServiceTest {
                 matchResultRepository,
                 clubBookingService,
                 playerProfileResolverService,
-                ratingApplicationService
+                ratingApplicationService,
+                playerEventNotificationService
         );
     }
 
@@ -88,7 +97,8 @@ class MatchServiceTest {
         ReflectionTestUtils.setField(club, "id", 7L);
 
         when(playerProfileResolverService.getOrCreateByUserEmail("player@example.com")).thenReturn(creator);
-        when(clubBookingService.resolveClubBooking(7L, Instant.parse("2026-03-20T20:00:00Z"), "Rambla")).thenReturn(club);
+        when(clubBookingService.resolveClubBooking(7L, Instant.parse("2026-03-20T20:00:00Z"), "Rambla"))
+                .thenReturn(new ClubBookingResolution(club, ClubBookingMode.DIRECT));
         when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> {
             Match match = invocation.getArgument(0);
             ReflectionTestUtils.setField(match, "id", 1L);
@@ -119,6 +129,41 @@ class MatchServiceTest {
         assertEquals(4, response.maxPlayers());
         assertEquals(1, response.currentPlayerCount());
         assertEquals(10L, participantCaptor.getValue().getPlayerProfile().getId());
+    }
+
+    @Test
+    void createMatchUsesPendingStatusWhenClubRequiresConfirmation() {
+        PlayerProfile creator = buildPlayerProfile(10L, 100L, "Player One");
+        Club club = Club.builder().name("World Padel").city("Montevideo").bookingMode(ClubBookingMode.CONFIRMATION_REQUIRED).build();
+        ReflectionTestUtils.setField(club, "id", 8L);
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("player@example.com")).thenReturn(creator);
+        when(clubBookingService.resolveClubBooking(8L, Instant.parse("2026-03-20T20:00:00Z"), "World Padel - Cancha 1"))
+                .thenReturn(new ClubBookingResolution(club, ClubBookingMode.CONFIRMATION_REQUIRED));
+        when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> {
+            Match match = invocation.getArgument(0);
+            ReflectionTestUtils.setField(match, "id", 2L);
+            match.setCreatedAt(Instant.parse("2026-03-17T10:00:00Z"));
+            match.setUpdatedAt(Instant.parse("2026-03-17T10:00:00Z"));
+            return match;
+        });
+        when(matchResultRepository.findByMatchId(2L)).thenReturn(Optional.empty());
+        when(matchParticipantRepository.findAllByMatchIdOrderByJoinedAtAsc(2L)).thenReturn(List.of(
+                MatchParticipant.builder()
+                        .match(buildMatch(2L, creator, club, MatchStatus.PENDING_CLUB_CONFIRMATION))
+                        .playerProfile(creator)
+                        .team(null)
+                        .joinedAt(Instant.parse("2026-03-17T10:00:01Z"))
+                        .build()
+        ));
+
+        MatchResponse response = matchService.createMatch(
+                "player@example.com",
+                new CreateMatchRequest(Instant.parse("2026-03-20T20:00:00Z"), 8L, "World Padel - Cancha 1", "Por los puntos")
+        );
+
+        assertEquals(MatchStatus.PENDING_CLUB_CONFIRMATION, response.status());
+        assertEquals(1, response.currentPlayerCount());
     }
 
     @Test
@@ -156,6 +201,7 @@ class MatchServiceTest {
         assertEquals(MatchStatus.FULL, response.status());
         assertEquals(4, response.currentPlayerCount());
         verify(matchRepository).save(match);
+        verify(playerEventNotificationService).notifyMatchFull(eq(match), anyList());
     }
 
     @Test
@@ -201,6 +247,7 @@ class MatchServiceTest {
 
         assertEquals(MatchStatus.CANCELLED, response.status());
         verify(matchRepository).save(match);
+        verify(playerEventNotificationService).notifyMatchCancelled(eq(match), anyList());
     }
 
     @Test
@@ -347,6 +394,7 @@ class MatchServiceTest {
         assertEquals(12L, response.confirmedByPlayerProfileId());
         assertEquals(MatchStatus.COMPLETED, match.getStatus());
         verify(ratingApplicationService).applyConfirmedResultIfNeeded(1L);
+        verify(playerEventNotificationService).notifyMatchResultConfirmed(match, participants);
     }
 
     @Test
@@ -387,6 +435,12 @@ class MatchServiceTest {
         assertEquals("Score mal cargado", response.rejectionReason());
         assertEquals(MatchStatus.FULL, match.getStatus());
         verifyNoInteractions(ratingApplicationService);
+        verify(playerEventNotificationService).notifyMatchResultRejected(
+                match,
+                participants,
+                "Score mal cargado",
+                result.getRejectedAt()
+        );
     }
 
     @Test

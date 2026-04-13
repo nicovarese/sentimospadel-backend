@@ -65,4 +65,18 @@ public interface TournamentMatchRepository extends JpaRepository<TournamentMatch
     boolean existsByTournamentId(Long tournamentId);
 
     long countByTournamentId(Long tournamentId);
+
+    @Query("""
+            select tm
+            from TournamentMatch tm
+            join fetch tm.tournament tournament
+            where tournament.club.id = :clubId
+              and tournament.id <> :excludedTournamentId
+              and tm.scheduledAt is not null
+              and tm.courtName is not null
+            """)
+    List<TournamentMatch> findAllScheduledByClubIdExcludingTournamentId(
+            @Param("clubId") Long clubId,
+            @Param("excludedTournamentId") Long excludedTournamentId
+    );
 }

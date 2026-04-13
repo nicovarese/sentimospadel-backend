@@ -1,8 +1,10 @@
 package com.sentimospadel.backend.tournament.service;
 
 import com.sentimospadel.backend.match.enums.MatchWinnerTeam;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
+import com.sentimospadel.backend.rating.service.TournamentRatingApplicationService;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.shared.exception.ConflictException;
 import com.sentimospadel.backend.shared.exception.ResourceNotFoundException;
@@ -24,6 +26,7 @@ import com.sentimospadel.backend.tournament.enums.TournamentMatchPhase;
 import com.sentimospadel.backend.tournament.enums.TournamentMatchResultStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentMatchStatus;
 import com.sentimospadel.backend.tournament.enums.TournamentStatus;
+import com.sentimospadel.backend.tournament.enums.TournamentStandingsTiebreak;
 import com.sentimospadel.backend.tournament.repository.TournamentMatchRepository;
 import com.sentimospadel.backend.tournament.repository.TournamentMatchResultRepository;
 import java.time.Instant;
@@ -48,6 +51,8 @@ public class TournamentMatchService {
     private final PlayerProfileResolverService playerProfileResolverService;
     private final TournamentMapper tournamentMapper;
     private final TournamentStandingsService tournamentStandingsService;
+    private final PlayerEventNotificationService playerEventNotificationService;
+    private final TournamentRatingApplicationService tournamentRatingApplicationService;
 
     @Transactional(readOnly = true)
     public List<TournamentMatchResponse> getTournamentMatches(Long tournamentId) {
@@ -116,11 +121,13 @@ public class TournamentMatchService {
 
         match.setStatus(TournamentMatchStatus.COMPLETED);
         tournamentMatchRepository.save(match);
+        tournamentRatingApplicationService.applyConfirmedCompetitiveResultIfNeeded(savedResult);
 
         if (match.getTournament().getFormat() == TournamentFormat.ELIMINATION) {
             advanceEliminationBracketIfNeeded(match.getTournament());
         }
         updateTournamentCompletionIfNeeded(match.getTournament());
+        playerEventNotificationService.notifyTournamentResultConfirmed(match);
 
         return tournamentMapper.toMatchResultResponse(savedResult);
     }
@@ -153,6 +160,7 @@ public class TournamentMatchService {
 
         match.setStatus(TournamentMatchStatus.SCHEDULED);
         tournamentMatchRepository.save(match);
+        playerEventNotificationService.notifyTournamentResultRejected(match, savedResult.getRejectionReason(), savedResult.getRejectedAt());
         return tournamentMapper.toMatchResultResponse(savedResult);
     }
 
@@ -240,9 +248,7 @@ public class TournamentMatchService {
                 .map(TournamentStandingsGroupResponse::standings)
                 .filter(groupStandings -> !groupStandings.isEmpty())
                 .map(groupStandings -> groupStandings.getFirst())
-                .sorted(Comparator.comparingInt(TournamentStandingsEntryResponse::points).reversed()
-                        .thenComparingInt(TournamentStandingsEntryResponse::gamesDifference).reversed()
-                        .thenComparingInt(TournamentStandingsEntryResponse::gamesWon).reversed())
+                .sorted(groupWinnerComparator(tournament))
                 .map(entry -> resolveEntry(tournament, entry.tournamentEntryId()))
                 .toList();
 
@@ -419,6 +425,20 @@ public class TournamentMatchService {
 
     private boolean allCompleted(List<TournamentMatch> matches) {
         return !matches.isEmpty() && matches.stream().allMatch(match -> match.getStatus() == TournamentMatchStatus.COMPLETED);
+    }
+
+    private Comparator<TournamentStandingsEntryResponse> groupWinnerComparator(Tournament tournament) {
+        Comparator<TournamentStandingsEntryResponse> tiebreakComparator = tournament.getStandingsTiebreak() == TournamentStandingsTiebreak.SETS_DIFFERENCE
+                ? Comparator.comparingInt(TournamentStandingsEntryResponse::setDifference).reversed()
+                    .thenComparingInt(TournamentStandingsEntryResponse::gamesDifference).reversed()
+                    .thenComparingInt(TournamentStandingsEntryResponse::gamesWon).reversed()
+                : Comparator.comparingInt(TournamentStandingsEntryResponse::gamesDifference).reversed()
+                    .thenComparingInt(TournamentStandingsEntryResponse::gamesWon).reversed()
+                    .thenComparingInt(TournamentStandingsEntryResponse::setDifference).reversed();
+
+        return Comparator.comparingInt(TournamentStandingsEntryResponse::points).reversed()
+                .thenComparing(tiebreakComparator)
+                .thenComparing(TournamentStandingsEntryResponse::teamName);
     }
 
     private TournamentMatchResult buildNewResult(

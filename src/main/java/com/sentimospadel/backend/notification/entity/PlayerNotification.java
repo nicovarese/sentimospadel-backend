@@ -70,6 +70,9 @@ public class PlayerNotification extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    @Column(name = "managed_by_sync", nullable = false)
+    private boolean managedBySync;
+
     @Column(name = "read_at")
     private Instant readAt;
 }

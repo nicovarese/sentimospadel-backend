@@ -4,6 +4,7 @@ import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.entity.ClubActivityLog;
 import com.sentimospadel.backend.club.repository.ClubActivityLogRepository;
 import com.sentimospadel.backend.club.repository.ClubRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.enums.ClubVerificationStatus;
 import com.sentimospadel.backend.player.enums.UruguayCategory;
@@ -39,6 +40,7 @@ public class ClubVerificationService {
     private final ClubRepository clubRepository;
     private final ClubActivityLogRepository clubActivityLogRepository;
     private final ClubVerificationRequestRepository clubVerificationRequestRepository;
+    private final PlayerEventNotificationService playerEventNotificationService;
 
     @Transactional(readOnly = true)
     public PlayerClubVerificationSummaryResponse getMyVerificationSummary(String authenticatedEmail) {
@@ -125,6 +127,7 @@ public class ClubVerificationService {
         playerProfile.setClubVerificationStatus(ClubVerificationStatus.VERIFIED);
 
         registerActivity(managedClub, "Verificacion aprobada", playerProfile.getFullName() + " fue validado por el club");
+        playerEventNotificationService.notifyClubVerificationDecision(verificationRequest);
         return toManagementResponse(verificationRequest);
     }
 
@@ -154,6 +157,7 @@ public class ClubVerificationService {
         playerProfile.setClubVerificationStatus(ClubVerificationStatus.REJECTED);
 
         registerActivity(managedClub, "Verificacion rechazada", playerProfile.getFullName() + " requiere nueva revision");
+        playerEventNotificationService.notifyClubVerificationDecision(verificationRequest);
         return toManagementResponse(verificationRequest);
     }
 

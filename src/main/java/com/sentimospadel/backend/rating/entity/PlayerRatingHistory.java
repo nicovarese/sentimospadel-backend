@@ -2,6 +2,7 @@ package com.sentimospadel.backend.rating.entity;
 
 import com.sentimospadel.backend.match.entity.Match;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
+import com.sentimospadel.backend.tournament.entity.TournamentMatch;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -34,13 +35,17 @@ public class PlayerRatingHistory {
     @Setter(AccessLevel.NONE)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "player_profile_id", nullable = false)
     private PlayerProfile playerProfile;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "match_id", nullable = false)
+    @JoinColumn(name = "match_id")
     private Match match;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tournament_match_id")
+    private TournamentMatch tournamentMatch;
 
     @Column(name = "old_rating", nullable = false, precision = 4, scale = 2)
     private BigDecimal oldRating;

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.entity.ClubAgendaSlotOverride;
 import com.sentimospadel.backend.club.entity.ClubCourt;
+import com.sentimospadel.backend.club.enums.ClubBookingMode;
 import com.sentimospadel.backend.club.enums.ClubAgendaSlotStatus;
 import com.sentimospadel.backend.club.repository.ClubAgendaSlotOverrideRepository;
 import com.sentimospadel.backend.club.repository.ClubCourtRepository;
@@ -156,6 +157,7 @@ class ClubBookingServiceTest {
                 .name(name)
                 .city("Montevideo")
                 .integrated(true)
+                .bookingMode(ClubBookingMode.DIRECT)
                 .build();
         ReflectionTestUtils.setField(club, "id", id);
         return club;

@@ -105,7 +105,7 @@ public class TournamentStandingsService {
 
         confirmedResults.forEach(result -> applyConfirmedResult(tournament, standings, result));
 
-        List<MutableStandingsRow> sortedRows = sortRows(standings.values().stream().toList());
+        List<MutableStandingsRow> sortedRows = sortRows(tournament, standings.values().stream().toList());
         return toResponses(sortedRows);
     }
 
@@ -142,7 +142,7 @@ public class TournamentStandingsService {
                         }
                     });
 
-            List<MutableStandingsRow> sortedRows = sortRows(standings.values().stream().toList());
+            List<MutableStandingsRow> sortedRows = sortRows(tournament, standings.values().stream().toList());
             groups.add(new TournamentStandingsGroupResponse(group.getKey(), toResponses(sortedRows)));
         }
 
@@ -193,11 +193,7 @@ public class TournamentStandingsService {
         int teamOneGamesWon = 0;
         int teamTwoGamesWon = 0;
 
-        List<int[]> sets = List.of(
-                toSet(result.getSetOneTeamOneGames(), result.getSetOneTeamTwoGames()),
-                toSet(result.getSetTwoTeamOneGames(), result.getSetTwoTeamTwoGames()),
-                toSet(result.getSetThreeTeamOneGames(), result.getSetThreeTeamTwoGames())
-        );
+        List<int[]> sets = extractPlayedSets(result);
 
         for (int[] set : sets) {
             if (set == null) {
@@ -305,13 +301,19 @@ public class TournamentStandingsService {
         return entry.getSecondaryPlayerProfile() == null ? null : entry.getSecondaryPlayerProfile().getId();
     }
 
-    private List<MutableStandingsRow> sortRows(List<MutableStandingsRow> rows) {
+    private List<MutableStandingsRow> sortRows(Tournament tournament, List<MutableStandingsRow> rows) {
+        Comparator<MutableStandingsRow> tiebreakComparator = tournament.getStandingsTiebreak() == com.sentimospadel.backend.tournament.enums.TournamentStandingsTiebreak.SETS_DIFFERENCE
+                ? Comparator.comparingInt(MutableStandingsRow::setDifference).reversed()
+                    .thenComparingInt(MutableStandingsRow::gamesDifference).reversed()
+                    .thenComparingInt(MutableStandingsRow::gamesWon).reversed()
+                : Comparator.comparingInt(MutableStandingsRow::gamesDifference).reversed()
+                    .thenComparingInt(MutableStandingsRow::gamesWon).reversed()
+                    .thenComparingInt(MutableStandingsRow::setDifference).reversed();
+
         return rows.stream()
                 .sorted(Comparator
                         .comparingInt(MutableStandingsRow::points).reversed()
-                        .thenComparingInt(MutableStandingsRow::gamesDifference).reversed()
-                        .thenComparingInt(MutableStandingsRow::gamesWon).reversed()
-                        .thenComparingInt(MutableStandingsRow::setDifference).reversed()
+                        .thenComparing(tiebreakComparator)
                         .thenComparing(row -> tournamentMapper.displayTeamName(row.entry())))
                 .toList();
     }
@@ -338,11 +340,7 @@ public class TournamentStandingsService {
         int teamOneGamesWon = 0;
         int teamTwoGamesWon = 0;
 
-        List<int[]> sets = List.of(
-                toSet(result.getSetOneTeamOneGames(), result.getSetOneTeamTwoGames()),
-                toSet(result.getSetTwoTeamOneGames(), result.getSetTwoTeamTwoGames()),
-                toSet(result.getSetThreeTeamOneGames(), result.getSetThreeTeamTwoGames())
-        );
+        List<int[]> sets = extractPlayedSets(result);
 
         for (int[] set : sets) {
             if (set == null) {
@@ -386,6 +384,21 @@ public class TournamentStandingsService {
             return null;
         }
         return new int[]{teamOneGames, teamTwoGames};
+    }
+
+    private List<int[]> extractPlayedSets(TournamentMatchResult result) {
+        List<int[]> sets = new ArrayList<>();
+        appendSet(sets, result.getSetOneTeamOneGames(), result.getSetOneTeamTwoGames());
+        appendSet(sets, result.getSetTwoTeamOneGames(), result.getSetTwoTeamTwoGames());
+        appendSet(sets, result.getSetThreeTeamOneGames(), result.getSetThreeTeamTwoGames());
+        return sets;
+    }
+
+    private void appendSet(List<int[]> sets, Integer teamOneGames, Integer teamTwoGames) {
+        int[] set = toSet(teamOneGames, teamTwoGames);
+        if (set != null) {
+            sets.add(set);
+        }
     }
 
     private static final class MutableStandingsRow {

@@ -18,6 +18,7 @@ import com.sentimospadel.backend.auth.dto.ResendEmailVerificationRequest;
 import com.sentimospadel.backend.auth.enums.RegisterAccountType;
 import com.sentimospadel.backend.auth.service.AuthService;
 import com.sentimospadel.backend.auth.service.EmailVerificationNotificationService;
+import com.sentimospadel.backend.player.enums.PreferredSide;
 import com.sentimospadel.backend.shared.exception.BadRequestException;
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.enums.UserRole;
@@ -62,6 +63,11 @@ class AuthFlowIntegrationTest {
                 RegisterAccountType.PLAYER,
                 null,
                 null,
+                null,
+                "https://cdn.example.com/fresh-player.png",
+                PreferredSide.RIGHT,
+                "4.0",
+                "Montevideo",
                 null,
                 true,
                 "2026-04-07.1",
@@ -113,6 +119,11 @@ class AuthFlowIntegrationTest {
                 "Club Montevideo",
                 "Montevideo",
                 "Rivera 1234",
+                null,
+                null,
+                null,
+                null,
+                null,
                 true,
                 "2026-04-07.1",
                 true,
@@ -164,6 +175,11 @@ class AuthFlowIntegrationTest {
                 RegisterAccountType.PLAYER,
                 null,
                 null,
+                null,
+                null,
+                PreferredSide.LEFT,
+                "3.5",
+                "Maldonado",
                 null,
                 true,
                 "2026-04-07.1",

@@ -6,20 +6,25 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sentimospadel.backend.club.entity.Club;
 import com.sentimospadel.backend.club.repository.ClubRepository;
+import com.sentimospadel.backend.notification.service.PlayerEventNotificationService;
 import com.sentimospadel.backend.player.entity.PlayerProfile;
 import com.sentimospadel.backend.player.repository.PlayerProfileRepository;
 import com.sentimospadel.backend.player.service.PlayerProfileResolverService;
 import com.sentimospadel.backend.shared.exception.ConflictException;
 import com.sentimospadel.backend.tournament.dto.CreateTournamentRequest;
 import com.sentimospadel.backend.tournament.dto.LaunchTournamentRequest;
+import com.sentimospadel.backend.tournament.dto.TournamentLaunchPreviewResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentEntryMemberResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentEntryResponse;
 import com.sentimospadel.backend.tournament.dto.TournamentResponse;
+import com.sentimospadel.backend.tournament.dto.UpsertMyTournamentEntryRequest;
+import com.sentimospadel.backend.tournament.dto.UpdateTournamentEntryTeamNameRequest;
 import com.sentimospadel.backend.tournament.entity.Tournament;
 import com.sentimospadel.backend.tournament.entity.TournamentEntry;
 import com.sentimospadel.backend.tournament.entity.TournamentMatch;
@@ -71,6 +76,9 @@ class TournamentServiceTest {
     @Mock
     private TournamentMapper tournamentMapper;
 
+    @Mock
+    private PlayerEventNotificationService playerEventNotificationService;
+
     @InjectMocks
     private TournamentService tournamentService;
 
@@ -89,6 +97,7 @@ class TournamentServiceTest {
                             tournament.getDescription(),
                             tournament.getClub() == null ? null : tournament.getClub().getId(),
                             tournament.getCity(),
+                            tournament.getCategoryLabels() == null ? List.of() : tournament.getCategoryLabels(),
                             tournament.getStartDate(),
                             tournament.getEndDate(),
                             tournament.getStatus(),
@@ -115,6 +124,14 @@ class TournamentServiceTest {
                             tournament.getUpdatedAt()
                     );
                 });
+        lenient().when(tournamentMapper.displayTeamName(any(TournamentEntry.class)))
+                .thenAnswer(invocation -> {
+                    TournamentEntry entry = invocation.getArgument(0);
+                    if (entry.getTeamName() != null && !entry.getTeamName().isBlank()) {
+                        return entry.getTeamName();
+                    }
+                    return entry.getPrimaryPlayerProfile() == null ? "" : entry.getPrimaryPlayerProfile().getFullName();
+                });
     }
 
     @Test
@@ -126,6 +143,7 @@ class TournamentServiceTest {
                 "Primer torneo social",
                 5L,
                 "Montevideo",
+                List.of("4ta Categoria"),
                 LocalDate.of(2026, 4, 15),
                 LocalDate.of(2026, 4, 20),
                 TournamentFormat.LEAGUE,
@@ -154,6 +172,7 @@ class TournamentServiceTest {
                     .americanoType(tournament.getAmericanoType())
                     .club(tournament.getClub())
                     .city(tournament.getCity())
+                    .categoryLabels(tournament.getCategoryLabels())
                     .startDate(tournament.getStartDate())
                     .endDate(tournament.getEndDate())
                     .status(tournament.getStatus())
@@ -182,6 +201,7 @@ class TournamentServiceTest {
         assertEquals(TournamentFormat.LEAGUE, response.format());
         assertEquals(8, response.maxEntries());
         assertEquals(2, response.leagueRounds());
+        assertEquals(List.of("4ta Categoria"), response.categoryLabels());
     }
 
     @Test
@@ -207,7 +227,7 @@ class TournamentServiceTest {
         when(tournamentEntryRepository.save(any(TournamentEntry.class))).thenReturn(savedEntry);
         when(tournamentMatchRepository.countByTournamentId(200L)).thenReturn(0L);
 
-        TournamentResponse response = tournamentService.joinTournament("joiner@example.com", 200L);
+        TournamentResponse response = tournamentService.joinTournament("joiner@example.com", 200L, null);
 
         assertEquals(1, response.currentEntriesCount());
         assertEquals(TournamentEntryStatus.PENDING, response.entries().getFirst().status());
@@ -234,7 +254,45 @@ class TournamentServiceTest {
         when(tournamentRepository.findById(201L)).thenReturn(Optional.of(tournament));
         when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(201L, TournamentEntryKind.REGISTERED)).thenReturn(List.of(existingEntry));
 
-        assertThrows(ConflictException.class, () -> tournamentService.joinTournament("joiner@example.com", 201L));
+        assertThrows(ConflictException.class, () -> tournamentService.joinTournament("joiner@example.com", 201L, null));
+    }
+
+    @Test
+    void joinTournamentAllowsRegisteringPartnerAndPreferences() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        PlayerProfile joiner = playerProfile(11L, "joiner@example.com", "Joiner");
+        PlayerProfile partner = playerProfile(12L, "partner@example.com", "Partner");
+        Tournament tournament = tournament(202L, creator, TournamentStatus.OPEN, TournamentFormat.ELIMINATION, 8);
+        TournamentEntry savedEntry = TournamentEntry.builder()
+                .id(303L)
+                .tournament(tournament)
+                .primaryPlayerProfile(joiner)
+                .secondaryPlayerProfile(partner)
+                .createdBy(joiner)
+                .teamName("Dupla QA")
+                .entryKind(TournamentEntryKind.REGISTERED)
+                .status(TournamentEntryStatus.CONFIRMED)
+                .createdAt(Instant.parse("2026-03-24T13:00:00Z"))
+                .timePreferences(List.of("2026-04-15|EVENING"))
+                .build();
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("joiner@example.com")).thenReturn(joiner);
+        when(tournamentRepository.findById(202L)).thenReturn(Optional.of(tournament));
+        when(playerProfileRepository.findById(12L)).thenReturn(Optional.of(partner));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(202L, TournamentEntryKind.REGISTERED))
+                .thenReturn(List.of(), List.of(), List.of(savedEntry));
+        when(tournamentEntryRepository.save(any(TournamentEntry.class))).thenReturn(savedEntry);
+        when(tournamentMatchRepository.countByTournamentId(202L)).thenReturn(0L);
+
+        TournamentResponse response = tournamentService.joinTournament(
+                "joiner@example.com",
+                202L,
+                new UpsertMyTournamentEntryRequest("Dupla QA", 12L, List.of("2026-04-15|EVENING"))
+        );
+
+        assertEquals(1, response.currentEntriesCount());
+        assertEquals(TournamentEntryStatus.CONFIRMED, response.entries().getFirst().status());
+        assertEquals("2026-04-15|EVENING", response.entries().getFirst().timePreferences().getFirst());
     }
 
     @Test
@@ -428,6 +486,129 @@ class TournamentServiceTest {
         assertEquals(2, matchesCaptor.getValue().size());
         assertEquals(TournamentMatchPhase.AMERICANO_STAGE, matchesCaptor.getValue().getFirst().getPhase());
         assertEquals(List.of("Ronda 1", "Ronda 2"), matchesCaptor.getValue().stream().map(TournamentMatch::getRoundLabel).toList());
+    }
+
+    @Test
+    void previewLaunchBuildsEliminationPreviewWithoutPersisting() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        Tournament tournament = tournament(208L, creator, TournamentStatus.OPEN, TournamentFormat.ELIMINATION, 8);
+        tournament.setEndDate(LocalDate.of(2026, 4, 20));
+
+        List<TournamentEntry> entries = List.of(
+                confirmedEntry(801L, tournament, playerProfile(60L, "a1@example.com", "A1"), playerProfile(61L, "a2@example.com", "A2"), "Team A"),
+                confirmedEntry(802L, tournament, playerProfile(62L, "b1@example.com", "B1"), playerProfile(63L, "b2@example.com", "B2"), "Team B"),
+                confirmedEntry(803L, tournament, playerProfile(64L, "c1@example.com", "C1"), playerProfile(65L, "c2@example.com", "C2"), "Team C"),
+                confirmedEntry(804L, tournament, playerProfile(66L, "d1@example.com", "D1"), playerProfile(67L, "d2@example.com", "D2"), "Team D")
+        );
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
+        when(tournamentRepository.findById(208L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(208L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
+        when(tournamentMatchRepository.existsByTournamentId(208L)).thenReturn(false);
+
+        TournamentLaunchPreviewResponse response = tournamentService.previewLaunchTournament(
+                "creator@example.com",
+                208L,
+                new LaunchTournamentRequest(2, 2, null, List.of("Cancha 1", "Cancha 2"))
+        );
+
+        assertEquals(2, response.numberOfGroups());
+        assertEquals(2, response.groups().size());
+        assertEquals(2, response.stageMatches().size());
+        assertEquals(3, response.playoffMatches().size());
+        assertEquals("Grupo A", response.groups().getFirst().name());
+
+        verify(tournamentEntryRepository, never()).saveAll(anyList());
+        verify(tournamentMatchRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void launchTournamentRejectsUnsupportedEliminationGroupCount() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        Tournament tournament = tournament(209L, creator, TournamentStatus.OPEN, TournamentFormat.ELIMINATION, 8);
+        tournament.setEndDate(LocalDate.of(2026, 4, 20));
+
+        List<TournamentEntry> entries = List.of(
+                confirmedEntry(901L, tournament, playerProfile(70L, "a1@example.com", "A1"), playerProfile(71L, "a2@example.com", "A2"), "Team A"),
+                confirmedEntry(902L, tournament, playerProfile(72L, "b1@example.com", "B1"), playerProfile(73L, "b2@example.com", "B2"), "Team B"),
+                confirmedEntry(903L, tournament, playerProfile(74L, "c1@example.com", "C1"), playerProfile(75L, "c2@example.com", "C2"), "Team C"),
+                confirmedEntry(904L, tournament, playerProfile(76L, "d1@example.com", "D1"), playerProfile(77L, "d2@example.com", "D2"), "Team D"),
+                confirmedEntry(905L, tournament, playerProfile(78L, "e1@example.com", "E1"), playerProfile(79L, "e2@example.com", "E2"), "Team E"),
+                confirmedEntry(906L, tournament, playerProfile(80L, "f1@example.com", "F1"), playerProfile(81L, "f2@example.com", "F2"), "Team F")
+        );
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("creator@example.com")).thenReturn(creator);
+        when(tournamentRepository.findById(209L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(209L, TournamentEntryKind.REGISTERED)).thenReturn(entries);
+        when(tournamentMatchRepository.existsByTournamentId(209L)).thenReturn(false);
+
+        assertThrows(ConflictException.class, () -> tournamentService.launchTournament(
+                "creator@example.com",
+                209L,
+                new LaunchTournamentRequest(2, 4, null, List.of("Cancha 1", "Cancha 2"))
+        ));
+    }
+
+    @Test
+    void updateMyEntryTeamNameUpdatesConfirmedEntry() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        PlayerProfile player = playerProfile(11L, "team@example.com", "Team Player");
+        PlayerProfile partner = playerProfile(12L, "partner@example.com", "Partner");
+        Tournament tournament = tournament(210L, creator, TournamentStatus.OPEN, TournamentFormat.LEAGUE, 8);
+        TournamentEntry confirmedEntry = confirmedEntry(1001L, tournament, player, partner, "Equipo Inicial");
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("team@example.com")).thenReturn(player);
+        when(tournamentRepository.findById(210L)).thenReturn(Optional.of(tournament));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(210L, TournamentEntryKind.REGISTERED))
+                .thenReturn(List.of(confirmedEntry));
+        when(tournamentEntryRepository.save(any(TournamentEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.countByTournamentId(210L)).thenReturn(0L);
+
+        TournamentResponse response = tournamentService.updateMyEntryTeamName(
+                "team@example.com",
+                210L,
+                new UpdateTournamentEntryTeamNameRequest("Top Padel A")
+        );
+
+        assertEquals("Top Padel A", response.entries().getFirst().teamName());
+        verify(tournamentEntryRepository).save(any(TournamentEntry.class));
+    }
+
+    @Test
+    void updateMyEntryCompletesPendingRegistrationWithPartnerAndPreferences() {
+        PlayerProfile creator = playerProfile(10L, "creator@example.com", "Creator");
+        PlayerProfile player = playerProfile(11L, "team@example.com", "Team Player");
+        PlayerProfile partner = playerProfile(12L, "partner@example.com", "Partner");
+        Tournament tournament = tournament(211L, creator, TournamentStatus.OPEN, TournamentFormat.ELIMINATION, 8);
+        TournamentEntry pendingEntry = TournamentEntry.builder()
+                .id(1002L)
+                .tournament(tournament)
+                .primaryPlayerProfile(player)
+                .createdBy(player)
+                .entryKind(TournamentEntryKind.REGISTERED)
+                .status(TournamentEntryStatus.PENDING)
+                .timePreferences(List.of())
+                .createdAt(Instant.parse("2026-03-24T12:10:00Z"))
+                .build();
+
+        when(playerProfileResolverService.getOrCreateByUserEmail("team@example.com")).thenReturn(player);
+        when(tournamentRepository.findById(211L)).thenReturn(Optional.of(tournament));
+        when(playerProfileRepository.findById(12L)).thenReturn(Optional.of(partner));
+        when(tournamentEntryRepository.findAllByTournamentIdAndEntryKindOrderByCreatedAtAsc(211L, TournamentEntryKind.REGISTERED))
+                .thenReturn(List.of(pendingEntry), List.of(pendingEntry));
+        when(tournamentEntryRepository.save(any(TournamentEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tournamentMatchRepository.countByTournamentId(211L)).thenReturn(0L);
+
+        TournamentResponse response = tournamentService.updateMyEntry(
+                "team@example.com",
+                211L,
+                new UpsertMyTournamentEntryRequest("Top Padel A", 12L, List.of("2026-04-16|AFTERNOON"))
+        );
+
+        assertEquals(TournamentEntryStatus.CONFIRMED, response.entries().getFirst().status());
+        assertEquals("Top Padel A", pendingEntry.getTeamName());
+        assertEquals(partner.getId(), pendingEntry.getSecondaryPlayerProfile().getId());
+        assertEquals(List.of("2026-04-16|AFTERNOON"), pendingEntry.getTimePreferences());
     }
 
     private TournamentEntryResponse toEntryResponse(TournamentEntry entry) {
