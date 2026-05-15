@@ -7,6 +7,7 @@ import com.sentimospadel.backend.tournament.config.TournamentInvitationPropertie
 import com.sentimospadel.backend.user.entity.User;
 import com.sentimospadel.backend.user.repository.UserRepository;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -37,19 +38,6 @@ import java.util.List;
 @EnableConfigurationProperties({JwtProperties.class, NotificationPushProperties.class, MatchInvitationProperties.class, TournamentInvitationProperties.class, PlayerProfilePhotoStorageProperties.class})
 public class SecurityConfig {
 
-    private static final List<String> LOCAL_DEV_ORIGIN_PATTERNS = List.of(
-            "http://localhost",
-            "https://localhost",
-            "http://127.0.0.1",
-            "https://127.0.0.1",
-            "http://localhost:*",
-            "https://localhost:*",
-            "http://127.0.0.1:*",
-            "https://127.0.0.1:*",
-            "capacitor://localhost",
-            "ionic://localhost"
-    );
-
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         // Keep the API stateless and only protect the routes that already depend on the JWT-backed user context.
@@ -79,7 +67,12 @@ public class SecurityConfig {
                                 "/api/tournaments/*/matches/*/result/confirm",
                                 "/api/tournaments/*/matches/*/result/reject"
                         ).authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/entries", "/api/tournaments/*/entries/me/team-name").authenticated()
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/tournaments/*/entries",
+                                "/api/tournaments/*/entries/me",
+                                "/api/tournaments/*/entries/me/team-name"
+                        ).authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -94,9 +87,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    CorsConfigurationSource corsConfigurationSource(Environment environment) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(LOCAL_DEV_ORIGIN_PATTERNS);
+        configuration.setAllowedOriginPatterns(resolveAllowedOriginPatterns(environment));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
@@ -104,6 +97,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);
         return source;
+    }
+
+    private List<String> resolveAllowedOriginPatterns(Environment environment) {
+        String configuredPatterns = environment.getProperty("app.security.cors.allowed-origin-patterns", "");
+
+        return List.of(configuredPatterns.split(",")).stream()
+                .map(String::trim)
+                .filter(pattern -> !pattern.isBlank())
+                .toList();
     }
 
     @Bean
