@@ -1,0 +1,19 @@
+name: Deploy Backend to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribi "produccion" para confirmar el deploy'
+        required: true
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'produccion'
+    environment: production
+
+    steps:
+      - name: Trigger Railway production deploy
+        run: curl -fsSL -X POST "${{ secrets.RAILWAY_PRODUCTION_DEPLOY_HOOK }}"

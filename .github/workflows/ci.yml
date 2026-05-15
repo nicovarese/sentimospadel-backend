@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - master
       - develop
 
 jobs:
@@ -35,3 +34,14 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t sentimospadel-backend:ci .
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - name: Trigger Railway staging deploy
+        run: curl -fsSL -X POST "${{ secrets.RAILWAY_STAGING_DEPLOY_HOOK }}"
