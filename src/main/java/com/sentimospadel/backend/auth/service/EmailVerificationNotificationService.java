@@ -19,6 +19,7 @@ public class EmailVerificationNotificationService {
 
     private final EmailVerificationProperties properties;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    private final ResendEmailGateway resendEmailGateway;
 
     @PostConstruct
     void validateConfiguration() {
@@ -31,7 +32,7 @@ public class EmailVerificationNotificationService {
         requireNonBlank(properties.getFromAddress(), "EMAIL_VERIFICATION_FROM");
     }
 
-    // Async so a slow SMTP server (timeouts, throttling, etc.) never blocks the HTTP
+    // Async so a slow mail provider (timeouts, throttling, etc.) never blocks the HTTP
     // response to /api/auth/register. If delivery fails we log it; the user can recover
     // via /api/auth/verify-email/resend.
     @Async
@@ -47,23 +48,39 @@ public class EmailVerificationNotificationService {
             return;
         }
 
+        String subject = properties.getSubject();
+        String body = buildEmailBody(displayName, verificationUrl);
+
+        // Prefer Resend's HTTPS API when configured (works behind PaaS providers that block
+        // outbound SMTP ports). Fall back to JavaMailSender / SMTP when no API key is set,
+        // which is useful in environments that have a working mail server (e.g. local MailHog).
+        if (resendEmailGateway.isConfigured()) {
+            try {
+                resendEmailGateway.send(properties.getFromAddress(), email, subject, body);
+                log.info("Sent verification email to {} via Resend API", email);
+            } catch (RuntimeException exception) {
+                log.error("Email verification delivery failed for {} via Resend API", email, exception);
+            }
+            return;
+        }
+
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
-            log.error("Email verification delivery requires a configured JavaMailSender; cannot deliver to {}", email);
+            log.error("No mail delivery mechanism configured (set RESEND_API_KEY or MAIL_HOST); cannot deliver to {}", email);
             return;
         }
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(properties.getFromAddress());
         message.setTo(email);
-        message.setSubject(properties.getSubject());
-        message.setText(buildEmailBody(displayName, verificationUrl));
+        message.setSubject(subject);
+        message.setText(body);
 
         try {
             mailSender.send(message);
-            log.info("Sent verification email to {}", email);
+            log.info("Sent verification email to {} via SMTP", email);
         } catch (MailException exception) {
-            log.error("Email verification delivery failed for {}", email, exception);
+            log.error("Email verification delivery failed for {} via SMTP", email, exception);
         }
     }
 
@@ -71,12 +88,12 @@ public class EmailVerificationNotificationService {
         return """
                 Hola %s,
 
-                Gracias por registrarte en Sentimos Padel.
+                Gracias por registrarte en PadelHood.
 
-                Para confirmar tu correo, hace click en este link:
+                Para confirmar tu correo, hacé click en este link:
                 %s
 
-                Si vos no creaste esta cuenta, podes ignorar este mensaje.
+                Si vos no creaste esta cuenta, podés ignorar este mensaje.
                 """.formatted(displayName, verificationUrl);
     }
 

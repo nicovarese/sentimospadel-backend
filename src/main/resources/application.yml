@@ -5,13 +5,14 @@ spring:
     multipart:
       max-file-size: ${PLAYER_PROFILE_PHOTO_MAX_FILE_SIZE:5MB}
       max-request-size: ${PLAYER_PROFILE_PHOTO_MAX_REQUEST_SIZE:5MB}
+  # SMTP is retained as a fallback (useful for local dev with MailHog or similar).
+  # In production we prefer app.mail.resend.api-key below because most PaaS providers
+  # block outbound SMTP ports.
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
-    # Timeouts cap how long we'll block on SMTP. Combined with @Async email delivery
-    # this means HTTP responses are never delayed by a stalled mail server.
     properties:
       mail:
         smtp:
@@ -57,6 +58,12 @@ management:
         enabled: true
 
 app:
+  mail:
+    resend:
+      # Preferred email delivery in production. When set, the backend posts to
+      # api.resend.com over HTTPS instead of using SMTP, which avoids PaaS providers
+      # blocking outbound port 587.
+      api-key: ${RESEND_API_KEY:}
   auth:
     rate-limit:
       enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
