@@ -71,8 +71,9 @@ public class AuthService {
             throw new DuplicateResourceException("Ya existe una cuenta con el correo " + normalizedEmail);
         }
 
-        if (userRepository.existsByPhone(normalizedPhone)) {
-            throw new DuplicateResourceException("Ya existe una cuenta con el telefono " + normalizedPhone);
+        // Phone is optional at registration; only check uniqueness if one was actually provided.
+        if (normalizedPhone != null && userRepository.existsByPhone(normalizedPhone)) {
+            throw new DuplicateResourceException("Ya existe una cuenta con el teléfono " + normalizedPhone);
         }
 
         String rawVerificationToken = generateVerificationToken();
@@ -350,8 +351,12 @@ public class AuthService {
     }
 
     private String normalizePhone(String phone) {
-        String trimmed = requireNonBlank(phone, "Phone is required");
-        String normalized = trimmed
+        // Phone is now optional at registration; users complete their profile (phone included)
+        // during the post-verification onboarding flow.
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        String normalized = phone.trim()
                 .replace(" ", "")
                 .replace("-", "")
                 .replace("(", "")

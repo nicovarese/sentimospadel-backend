@@ -42,7 +42,7 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(name = "phone", nullable = false, unique = true, length = 40)
+    @Column(name = "phone", nullable = true, unique = true, length = 40)
     private String phone;
 
     @Enumerated(EnumType.STRING)

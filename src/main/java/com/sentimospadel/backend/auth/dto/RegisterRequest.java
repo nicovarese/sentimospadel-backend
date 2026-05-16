@@ -15,8 +15,7 @@ public record RegisterRequest(
         @Email(message = "Email must be a valid email address")
         @Size(max = 255, message = "Email must be at most 255 characters")
         String email,
-        @NotBlank(message = "Phone is required")
-        @Size(min = 7, max = 40, message = "Phone must be between 7 and 40 characters")
+        @Size(max = 40, message = "Phone must be at most 40 characters")
         String phone,
         @NotBlank(message = "Password is required")
         @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
