@@ -59,5 +59,7 @@ app:
       storage-path: ${PLAYER_PROFILE_PHOTO_STORAGE_PATH}
       public-base-url: ${PLAYER_PROFILE_PHOTO_PUBLIC_BASE_URL}
   security:
+    cors:
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://staging.padelhooduy.com,capacitor://localhost,ionic://localhost}
     jwt:
       secret: ${JWT_SECRET}
