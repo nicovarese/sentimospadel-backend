@@ -298,13 +298,15 @@ public class AuthService {
     }
 
     private void createInitialPlayerProfile(User user, RegisterRequest request) {
+        // Profile fields beyond fullName are optional at registration; users complete them
+        // during the post-verification onboarding (preferred side, city, declared level, etc.).
         playerProfileRepository.save(PlayerProfile.builder()
                 .user(user)
                 .fullName(requireNonBlank(request.fullName(), "Full name is required"))
                 .photoUrl(trimToNull(request.photoUrl()))
-                .preferredSide(requirePreferredSide(request.preferredSide()))
-                .declaredLevel(requireNonBlank(request.declaredLevel(), "Declared level is required"))
-                .city(requireNonBlank(request.city(), "City is required"))
+                .preferredSide(request.preferredSide())
+                .declaredLevel(trimToNull(request.declaredLevel()))
+                .city(trimToNull(request.city()))
                 .representedClub(resolveRepresentedClub(request.representedClubId()))
                 .currentRating(BigDecimal.valueOf(1.00).setScale(2))
                 .provisional(true)
@@ -314,14 +316,6 @@ public class AuthService {
                 .requiresClubVerification(false)
                 .clubVerificationStatus(ClubVerificationStatus.NOT_REQUIRED)
                 .build());
-    }
-
-    private PreferredSide requirePreferredSide(PreferredSide preferredSide) {
-        if (preferredSide == null) {
-            throw new BadRequestException("Preferred side is required");
-        }
-
-        return preferredSide;
     }
 
     private Club resolveRepresentedClub(Long representedClubId) {
