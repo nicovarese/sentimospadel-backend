@@ -10,12 +10,17 @@ spring:
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
+    # Timeouts cap how long we'll block on SMTP. Combined with @Async email delivery
+    # this means HTTP responses are never delayed by a stalled mail server.
     properties:
       mail:
         smtp:
           auth: ${MAIL_SMTP_AUTH:true}
           starttls:
             enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${MAIL_SMTP_TIMEOUT_MS:10000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:10000}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/sentimospadel?currentSchema=public}
     username: ${DB_USERNAME:sentimospadel_user}

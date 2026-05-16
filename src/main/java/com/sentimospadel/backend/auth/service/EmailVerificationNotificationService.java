@@ -8,6 +8,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -30,6 +31,10 @@ public class EmailVerificationNotificationService {
         requireNonBlank(properties.getFromAddress(), "EMAIL_VERIFICATION_FROM");
     }
 
+    // Async so a slow SMTP server (timeouts, throttling, etc.) never blocks the HTTP
+    // response to /api/auth/register. If delivery fails we log it; the user can recover
+    // via /api/auth/verify-email/resend.
+    @Async
     public void sendVerificationEmail(String email, String displayName, String rawToken) {
         String verificationUrl = UriComponentsBuilder
                 .fromUriString(properties.getVerificationBaseUrl())
@@ -44,7 +49,8 @@ public class EmailVerificationNotificationService {
 
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
-            throw new IllegalStateException("Email verification delivery requires a configured JavaMailSender");
+            log.error("Email verification delivery requires a configured JavaMailSender; cannot deliver to {}", email);
+            return;
         }
 
         SimpleMailMessage message = new SimpleMailMessage();
@@ -55,8 +61,9 @@ public class EmailVerificationNotificationService {
 
         try {
             mailSender.send(message);
+            log.info("Sent verification email to {}", email);
         } catch (MailException exception) {
-            throw new IllegalStateException("Email verification delivery failed", exception);
+            log.error("Email verification delivery failed for {}", email, exception);
         }
     }
 
